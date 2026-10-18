@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://ddist5l6hbkjy"]
+
+[ext_resource type="Script" uid="uid://gby7aaicdm6c" path="res://Scripts/Human/Human.gd" id="1_1mkh7"]
+
+[node name="HumanRoot" type="Node2D" unique_id=2135791647]
+script = ExtResource("1_1mkh7")
