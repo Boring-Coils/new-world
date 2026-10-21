@@ -80,6 +80,9 @@ var wait_left: int = 0
 ## 是否虚弱
 var is_weak: bool = false
 
+## 是否正在「被新建筑挤出来」，这段时间不做新决策
+var _is_relocating: bool = false
+
 ## 内部计数：总共经过多少刻
 var _tick_count: int = 0
 
@@ -190,6 +193,10 @@ func _decide() -> void:
 	if is_weak:
 		return
 
+	# 正在被新建筑挤出来，先把路走完
+	if _is_relocating:
+		return
+
 	# 正在去水 / 去食物的路上（移动或等待中）不改变目标
 	if goal in [Goal.WATER, Goal.FOOD] and phase in [Phase.MOVING, Phase.WAITING]:
 		return
@@ -235,9 +242,14 @@ func _start_goal(new_goal: Goal) -> void:
 		_go_idle()
 		return
 
-	# 从工作站里出来：模型重新出现，人站在出入口格上
+	# 从工作站里出来：先回到出入口格，再走去新目标
 	if phase == Phase.INSIDE_WORK:
-		show()
+		var old_station := target
+		if old_station is WorkStation:
+			old_station.leave(self)
+			var exit_cell := old_station.get_nearest_entrance_cell(WorldGridGlobal.world.world_to_cell(position))
+			position = WorldGridGlobal.world.cell_to_world(exit_cell)
+		modulate = Color.WHITE
 
 	goal = new_goal
 	target = station
@@ -282,6 +294,45 @@ func _go_idle() -> void:
 	queue_redraw()
 
 
+## 被新建筑压在下面时由建筑那边调用：自己走到最近的空地，走完再重新决策
+func evict_out() -> void:
+	var world := WorldGridGlobal.world
+	var from_cell := world.world_to_cell(position)
+	var target_cell := world.find_nearest_walkable(from_cell)
+	if target_cell == from_cell:
+		return
+
+	# 脚下已经变成建筑格（不可走），寻路前临时放行，才能算出「从建筑里面走出来」的路径
+	var was_walkable := world.is_walkable(from_cell)
+	if not was_walkable:
+		world.set_walkable(from_cell, true)
+	var new_path := world.get_path(from_cell, target_cell)
+	if not was_walkable:
+		world.set_walkable(from_cell, false)
+
+	# 如果人正在别的工作站里，先退出来
+	if phase == Phase.INSIDE_WORK and target is WorkStation:
+		target.leave(self)
+	modulate = Color.WHITE
+
+	if new_path.is_empty():
+		# 被建筑整个包住、没有路可走：直接挪到最近的那块空地
+		position = world.cell_to_world(target_cell)
+		_is_relocating = false
+		_go_idle()
+		if not is_weak:
+			_decide()
+		return
+
+	goal = Goal.NONE
+	target = null
+	path = new_path
+	path_index = 0
+	phase = Phase.MOVING
+	_is_relocating = true
+	queue_redraw()
+
+
 # ---------------------------------------------------------------------------
 # 移动 / 等待
 # ---------------------------------------------------------------------------
@@ -311,6 +362,17 @@ func _move() -> void:
 func _arrive() -> void:
 	path.clear()
 	path_index = 0
+
+	# 被新建筑挤出来，走到空地就算结束，原地重新决策
+	if _is_relocating:
+		_is_relocating = false
+		phase = Phase.IDLE
+		goal = Goal.NONE
+		queue_redraw()
+		if not is_weak:
+			_decide()
+		return
+
 	phase = Phase.WAITING
 	wait_left = 0 if target == null else target.get_wait_ticks()
 
@@ -337,9 +399,11 @@ func _finish_wait() -> void:
 		GlobalEnum.BuildingType.FOOD:
 			food = MAX_FOOD
 		GlobalEnum.BuildingType.WORK:
-			# 进入建筑内部：模型消失，原地（出入口格）藏起来
+			# 进入建筑内部：给他安排一个站内位置，半透明显示
 			phase = Phase.INSIDE_WORK
-			hide()
+			if target is WorkStation:
+				target.enter(self)
+			modulate = Color(1.0, 1.0, 1.0, 0.72)
 			queue_redraw()
 			return
 
@@ -355,18 +419,39 @@ func _finish_wait() -> void:
 # ---------------------------------------------------------------------------
 
 func _draw() -> void:
-	var color := Color(0.35, 0.85, 0.45)  # 空闲：绿
-	if is_weak:
-		color = Color(0.4, 0.4, 0.4)  # 虚弱：灰
-	elif phase == Phase.INSIDE_WORK:
-		color = Color(0.45, 0.45, 0.5)
-	else:
-		match goal:
-			Goal.WATER:
-				color = Color(0.3, 0.7, 1.0)
-			Goal.FOOD:
-				color = Color(1.0, 0.7, 0.2)
-			Goal.WORK:
-				color = Color(0.85, 0.35, 0.85)
+	# 白模小人：头 + 身体 + 四肢。衣服颜色表示当前在干什么。
+	var outfit := _get_outfit_color()
+	var skin := Color(0.96, 0.90, 0.83)
+	var outline := Color(0.13, 0.13, 0.17)
 
-	draw_circle(Vector2.ZERO, 3.0, color)
+	# 脚下的影子
+	draw_circle(Vector2(0.0, 4.2), 2.2, Color(0.0, 0.0, 0.0, 0.18))
+	# 腿
+	draw_line(Vector2(-1.0, 1.6), Vector2(-1.3, 4.0), outline, 0.9)
+	draw_line(Vector2(1.0, 1.6), Vector2(1.3, 4.0), outline, 0.9)
+	# 身体
+	draw_rect(Rect2(-1.6, -0.6, 3.2, 2.4), outfit, true)
+	draw_rect(Rect2(-1.6, -0.6, 3.2, 2.4), outline, false, 0.5)
+	# 手臂
+	draw_line(Vector2(-1.6, 0.0), Vector2(-2.4, 1.2), outline, 0.8)
+	draw_line(Vector2(1.6, 0.0), Vector2(2.4, 1.2), outline, 0.8)
+	# 头
+	draw_circle(Vector2(0.0, -2.1), 1.7, skin)
+	draw_arc(Vector2(0.0, -2.1), 1.7, 0.0, TAU, 14, outline, 0.5)
+	# 头发
+	draw_arc(Vector2(0.0, -2.2), 1.7, PI * 1.02, PI * 1.98, 10, Color(0.26, 0.21, 0.18), 0.9)
+
+
+## 衣服颜色 = 当前状态
+func _get_outfit_color() -> Color:
+	if is_weak:
+		return Color(0.45, 0.45, 0.45)  # 虚弱：灰
+	match goal:
+		Goal.WATER:
+			return Color(0.30, 0.65, 0.95)  # 去取水：蓝
+		Goal.FOOD:
+			return Color(0.95, 0.65, 0.20)  # 去取食：橙
+		Goal.WORK:
+			return Color(0.55, 0.45, 0.85)  # 上班：紫
+		_:
+			return Color(0.35, 0.75, 0.45)  # 空闲：绿

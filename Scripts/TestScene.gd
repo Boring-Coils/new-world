@@ -15,8 +15,11 @@ const WORK_ORIGIN := Vector2i(474, 492)
 const HUMAN_SPAWN_MIN := Vector2i(466, 496)
 const HUMAN_SPAWN_MAX := Vector2i(470, 498)
 
-## 左上角的状态文字
-var _status_label: Label
+## 左上角的调试面板
+var _debug_ui: DebugUI
+
+## 放置控制器
+var _placer: PlacementController
 
 ## 调试用：跑到这一刻数就打印统计并退出（0 表示不启用）
 var _max_ticks: int = 0
@@ -30,6 +33,9 @@ var _shot_path: String = ""
 ## 调试用：是否已经截图
 var _shot_done: bool = false
 
+## 调试用：启动后自动放一套建筑和居民，验证放置链路
+var _autoplace: bool = false
+
 
 func _ready() -> void:
 	randomize()
@@ -38,7 +44,11 @@ func _ready() -> void:
 	_setup_grid()
 	_setup_buildings()
 	_setup_humans()
+	_setup_placement()
 	_setup_ui()
+
+	if _autoplace:
+		_auto_test_placement.call_deferred()
 
 
 func _setup_camera() -> void:
@@ -109,14 +119,11 @@ func _setup_humans() -> void:
 
 
 func _setup_ui() -> void:
-	var layer := CanvasLayer.new()
-	layer.name = "UI"
-	add_child(layer)
-
-	_status_label = Label.new()
-	_status_label.position = Vector2(12, 8)
-	_status_label.add_theme_font_size_override("font_size", 16)
-	layer.add_child(_status_label)
+	_debug_ui = DebugUI.new()
+	_debug_ui.name = "DebugUI"
+	add_child(_debug_ui)
+	_debug_ui.kind_selected.connect(_on_kind_selected)
+	_placer.notice.connect(_debug_ui.set_hint)
 
 	# 调试用：命令行加 `-- --max-ticks=1200` 跑满这么多刻后打印统计并自动退出
 	for arg in OS.get_cmdline_user_args():
@@ -124,10 +131,67 @@ func _setup_ui() -> void:
 			_max_ticks = arg.trim_prefix("--max-ticks=").to_int()
 		elif arg.begins_with("--shot="):
 			_shot_path = arg.trim_prefix("--shot=")
+		elif arg == "--autoplace":
+			_autoplace = true
+		elif arg.begins_with("--ghost="):
+			# 调试用：把放置预览钉在某一格，方便截图（参数形如 --ghost=477,500）
+			var parts := arg.trim_prefix("--ghost=").split(",")
+			if parts.size() == 2:
+				_placer.select_kind(PlacementController.Kind.WATER)
+				_placer.debug_hover_cell = Vector2i(parts[0].to_int(), parts[1].to_int())
+
+
+## 调试用：自动放一个取水站、一个居民，再故意重叠放一次，验证「能放 / 不能放」两条路
+func _auto_test_placement() -> void:
+	var buildings_before := TickManager.buildings.size()
+	var humans_before := TickManager.humans.size()
+
+	_placer.select_kind(PlacementController.Kind.WATER)
+	var water_ok := _placer.place_at_cell(Vector2i(500, 520))
+
+	_placer.select_kind(PlacementController.Kind.HUMAN)
+	var human_ok := _placer.place_at_cell(Vector2i(503, 523))
+
+	# 同一格再放一次水站，应当失败
+	_placer.select_kind(PlacementController.Kind.WATER)
+	var overlap_ok := _placer.place_at_cell(Vector2i(500, 520))
+
+	# 出入口压住建筑，也应当失败
+	_placer.select_kind(PlacementController.Kind.FOOD)
+	var blocked_ok := _placer.place_at_cell(Vector2i(500, 522))
+
+	_placer.select_kind(PlacementController.Kind.NONE)
+
+	print("[AUTOPLACE] 水站=%s 居民=%s 重叠(应 false)=%s 压建筑(应 false)=%s" % [
+		water_ok, human_ok, overlap_ok, blocked_ok
+	])
+
+	# 故意把建筑放在居民站的那一格：建筑应当能放，人被挤出来
+	var victim := TickManager.humans[-1]
+	var before_pos := victim.position
+	var human_cell := WorldGridGlobal.world.world_to_cell(before_pos)
+	_placer.select_kind(PlacementController.Kind.WATER)
+	var on_human_ok := _placer.place_at_cell(human_cell)
+	var moved_ok: bool = victim._is_relocating or victim.position != before_pos
+	print("[AUTOPLACE] 压着居民放建筑=%s（应 true） 居民被挤出来=%s（应 true）" % [on_human_ok, moved_ok])
+
+	print("[AUTOPLACE] 建筑 %d -> %d，居民 %d -> %d" % [
+		buildings_before, TickManager.buildings.size(), humans_before, TickManager.humans.size()
+	])
+
+
+func _setup_placement() -> void:
+	_placer = PlacementController.new()
+	_placer.name = "Placement"
+	add_child(_placer)
+
+
+func _on_kind_selected(kind: int) -> void:
+	_placer.select_kind(kind)
 
 
 func _process(_delta: float) -> void:
-	if _status_label == null:
+	if _debug_ui == null:
 		return
 
 	var day := TickManager.get_day()
@@ -152,12 +216,15 @@ func _process(_delta: float) -> void:
 		else:
 			idle += 1
 
-	_status_label.text = "第 %d 天 第 %d 刻    取水 %d  取食 %d  工作 %d  空闲 %d  虚弱 %d" % [
+	_debug_ui.set_stats("第 %d 天 第 %d 刻\n取水 %d   取食 %d   工作 %d\n空闲 %d   虚弱 %d" % [
 		day, tick, at_water, at_food, working, idle, weak
-	]
+	])
 
 	# 调试模式：定期打印一份，跑满 _max_ticks 刻就退出
-	if _shot_path != "" and not _shot_done and TickManager.total_ticks >= 60:
+	var ready_for_shot := TickManager.total_ticks >= 100
+	if _placer != null and _placer.debug_hover_cell.x >= 0 and TickManager.total_ticks >= 10:
+		ready_for_shot = true
+	if _shot_path != "" and not _shot_done and ready_for_shot:
 		_shot_done = true
 		_take_screenshot()
 

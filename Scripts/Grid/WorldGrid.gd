@@ -152,6 +152,26 @@ func get_path(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
     return result
 
 
+## 找离 [param cell] 最近的一格可走地面（按一圈圈外扩找，只找方形范围内）。[br]
+##
+## 用来把「被新建筑压住的人」挤到空地上去。找不到就返回原格子。
+func find_nearest_walkable(cell: Vector2i, max_radius: int = 60) -> Vector2i:
+    if is_in_bounds(cell) and is_walkable(cell):
+        return cell
+
+    for radius in range(1, max_radius + 1):
+        for dx in range(-radius, radius + 1):
+            for dy in range(-radius, radius + 1):
+                # 只看这一圈的外框
+                if maxi(absi(dx), absi(dy)) != radius:
+                    continue
+                var candidate := Vector2i(cell.x + dx, cell.y + dy)
+                if is_in_bounds(candidate) and is_walkable(candidate):
+                    return candidate
+
+    return cell
+
+
 # ---------------------------------------------------------------------------
 # 格子坐标 <-> 世界（像素）坐标 换算
 # ---------------------------------------------------------------------------

@@ -33,9 +33,16 @@ var origin_cell: Vector2i = Vector2i.ZERO
 ## 主体颜色（子类里覆盖，用于测试场景里区分）
 var body_color: Color = Color(0.6, 0.6, 0.6)
 
+## 是否是「放置预览」（半透明、不注册到 TickManager、不占格子）
+var is_preview: bool = false
+
+## 预览状态下当前格子能不能放，决定描边是绿还是红
+var preview_valid: bool = true
+
 
 func _ready() -> void:
-	TickManager.register_building(self)
+	if not is_preview:
+		TickManager.register_building(self)
 
 
 func _exit_tree() -> void:
@@ -152,8 +159,7 @@ func place_at(world: WorldGrid, origin: Vector2i) -> bool:
 		return false
 
 	origin_cell = origin
-	# 让节点的原点落在左上角格子的中心，绘制时以这个点为基准
-	position = world.cell_to_world(origin) - Vector2(WorldGrid.CELL_SIZE, WorldGrid.CELL_SIZE) * 0.5
+	set_cell_origin(origin)
 
 	# 本体占的格子设成不可走
 	for cell in get_occupied_cells():
@@ -163,8 +169,15 @@ func place_at(world: WorldGrid, origin: Vector2i) -> bool:
 	return true
 
 
+## 把节点摆到「左上角格子 = [param cell]」的位置（不校验、不占格子，预览也用这个）
+func set_cell_origin(cell: Vector2i) -> void:
+	origin_cell = cell
+	# 节点原点落在左上角格子的左上角，绘制以这个点为基准
+	position = WorldGridGlobal.world.cell_to_world(cell) - Vector2(WorldGrid.CELL_SIZE, WorldGrid.CELL_SIZE) * 0.5
+
+
 # ---------------------------------------------------------------------------
-# 绘制（测试用：没有贴图，直接画色块）
+# 绘制（白模：没有贴图，全部用几何图形画）
 # ---------------------------------------------------------------------------
 
 func _draw() -> void:
@@ -172,15 +185,55 @@ func _draw() -> void:
 	var size_px := Vector2(size_cells) * cell
 	var rect := Rect2(Vector2.ZERO, size_px)
 
-	# 建筑主体
-	draw_rect(rect, body_color, true)
-	# 边框
-	draw_rect(rect, body_color.darkened(0.4), false, 2.0)
+	var alpha := 0.45 if is_preview else 1.0
+	var outline := Color(0.12, 0.13, 0.16, alpha)
+	if is_preview:
+		outline = Color(0.35, 1.0, 0.45, 0.95) if preview_valid else Color(1.0, 0.35, 0.35, 0.95)
 
-	# 出入口：亮色小方块
+	# 投影
+	draw_rect(Rect2(Vector2(1.4, 2.0), size_px), Color(0.0, 0.0, 0.0, 0.15 * alpha), true)
+	# 白色主体
+	draw_rect(rect, Color(0.94, 0.94, 0.91, alpha), true)
+	# 顶部一条深色檐口，看起来像建筑而不是一块板
+	draw_rect(Rect2(Vector2.ZERO, Vector2(size_px.x, size_px.y * 0.18)), Color(0.36, 0.37, 0.41, alpha), true)
+	# 描边
+	draw_rect(rect, outline, false, 1.6)
+
+	# 类型符号
+	_draw_type_symbol(Vector2(size_px.x * 0.5, size_px.y * 0.6), alpha)
+
+	# 出入口：黄色小广场
 	for offset in entrance_offsets:
-		var origin_world := Vector2(offset) * cell
-		draw_rect(Rect2(origin_world, Vector2(cell, cell)), Color(1.0, 1.0, 0.4), true)
+		var entrance_rect := Rect2(Vector2(offset) * cell, Vector2(cell, cell))
+		draw_rect(entrance_rect, Color(1.0, 0.85, 0.30, 0.75 * alpha), true)
+		draw_rect(entrance_rect, Color(0.45, 0.35, 0.05, alpha), false, 0.8)
+
+
+## 画建筑类型的小符号（水滴 / 碗 / 齿轮）
+func _draw_type_symbol(center: Vector2, alpha: float) -> void:
+	var color := Color(body_color.r, body_color.g, body_color.b, alpha)
+	var radius := minf(size_cells.x, size_cells.y) * float(WorldGrid.CELL_SIZE) * 0.17
+
+	match building_type:
+		GlobalEnum.BuildingType.WATER:
+			# 水滴：下面一个圆，上面一个三角
+			draw_circle(center + Vector2(0.0, radius * 0.55), radius * 0.8, color)
+			draw_colored_polygon(PackedVector2Array([
+				center + Vector2(-radius * 0.62, radius * 0.35),
+				center + Vector2(radius * 0.62, radius * 0.35),
+				center + Vector2(0.0, -radius * 1.45),
+			]), color)
+		GlobalEnum.BuildingType.FOOD:
+			# 碗：一条横线 + 下半圆
+			draw_line(center + Vector2(-radius, -radius * 0.15), center + Vector2(radius, -radius * 0.15), color, 1.6)
+			draw_arc(center + Vector2(0.0, -radius * 0.15), radius, 0.0, PI, 18, color, 1.6)
+		GlobalEnum.BuildingType.WORK:
+			# 齿轮：一个圆环 + 四根齿
+			draw_arc(center, radius * 0.72, 0.0, TAU, 20, color, 1.6)
+			for i in range(4):
+				var angle := TAU * float(i) / 4.0
+				var direction := Vector2(cos(angle), sin(angle))
+				draw_line(center + direction * radius * 0.72, center + direction * radius * 1.15, color, 1.6)
 
 
 # ---------------------------------------------------------------------------
