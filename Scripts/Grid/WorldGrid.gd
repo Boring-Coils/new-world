@@ -45,11 +45,15 @@ func _init(cells: Vector2i = Vector2i(100, 100)) -> void:
     _astar.region = Rect2i(Vector2i.ZERO, _cells)
     # 每格边长 = CELL_SIZE 像素（用 Vector2 是为了兼容可能出现的非正方形格子）
     _astar.cell_size = Vector2(CELL_SIZE, CELL_SIZE)
-    # 让「格子 → 世界坐标」换算出来的点落在格子【正中心】，而不是左上角，
-    # 这样角色移动到该点时才不会贴着格子边缘
+    # 让 AStarGrid2D 自带的 get_point_position() 返回格子【正中心】而不是左上角。
+    # 注意：本类的 cell_to_world() 已自行做同样换算，这里只影响引擎自带的坐标查询
     _astar.offset = Vector2(CELL_SIZE, CELL_SIZE) * 0.5
     # 斜向移动：仅当两侧都不被阻挡时才允许斜着走，避免贴着墙角「穿过去」
     _astar.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
+    # 启发式必须与「允许斜走」匹配：八方向用对角距离（octile）估算，
+    # 用默认的欧氏距离会高估代价，导致多探索大量无用格子
+    _astar.default_compute_heuristic = AStarGrid2D.HEURISTIC_OCTILE
+    _astar.default_estimate_heuristic = AStarGrid2D.HEURISTIC_OCTILE
     # 以上都是「结构参数」，设置完毕后必须调用一次 update() 才会生效
     _astar.update()
 
@@ -138,6 +142,12 @@ func get_path(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
     if not is_walkable(from) or not is_walkable(to):
         return empty
 
+    # 起点与终点重合时路径就是这一个格子本身。
+    # AStarGrid2D 在这种情况下会返回空数组，直接透传会被误判成「无路可走」
+    if from == to:
+        var same: Array[Vector2i] = [from]
+        return same
+
     var result: Array[Vector2i] = _astar.get_id_path(from, to)
     return result
 
@@ -151,9 +161,15 @@ func cell_to_world(cell: Vector2i) -> Vector2:
     return Vector2(cell) * CELL_SIZE + Vector2(CELL_SIZE, CELL_SIZE) * 0.5
 
 
-## 把像素坐标（世界坐标）换算成它所在的格子坐标。
+## 把像素坐标（世界坐标）换算成它所在的格子坐标。[br]
+##
+## 世界外的像素坐标会被夹到最边上的那一格，保证返回值永远合法。
 func world_to_cell(world: Vector2) -> Vector2i:
-    return Vector2i((world / CELL_SIZE).floor())
+    var cell := Vector2i((world / CELL_SIZE).floor())
+    return Vector2i(
+        clampi(cell.x, 0, _cells.x - 1),
+        clampi(cell.y, 0, _cells.y - 1),
+    )
 
 
 ## 把一整条格子路径换算成像素坐标（各格子中心）序列，方便角色依次移动过去。

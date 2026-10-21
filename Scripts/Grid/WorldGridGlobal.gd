@@ -8,7 +8,7 @@ extends Node
 ## 世界被切成多少格（横向 × 纵向）。想改世界大小，改这里即可。[br]
 ##
 ## 注意：修改后需重启项目才生效（网格在构造时一次性建立）。
-const WORLD_CELLS := Vector2i(200, 150)
+const WORLD_CELLS := Vector2i(1000, 1000)
 
 
 ## 全局唯一的网格对象。[br]
