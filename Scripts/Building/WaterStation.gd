@@ -16,6 +16,7 @@ func _init() -> void:
 	# 默认一个出入口，在建筑正上方中间那一格
 	entrance_offsets = [Vector2i(1, 3)]
 	body_color = Color(0.25, 0.55, 0.95)
+	display_name = "无限取水站"
 
 
 func get_wait_ticks() -> int:

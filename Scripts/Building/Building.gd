@@ -33,6 +33,9 @@ var origin_cell: Vector2i = Vector2i.ZERO
 ## 主体颜色（子类里覆盖，用于测试场景里区分）
 var body_color: Color = Color(0.6, 0.6, 0.6)
 
+## 显示用的名字（子类里覆盖，放下去时节点名就是它）
+var display_name: String = "建筑"
+
 ## 是否是「放置预览」（半透明、不注册到 TickManager、不占格子）
 var is_preview: bool = false
 

@@ -28,7 +28,7 @@ func _ready() -> void:
 func _build() -> void:
 	var panel := PanelContainer.new()
 	panel.position = Vector2(12, 12)
-	panel.custom_minimum_size = Vector2(206, 0)
+	panel.custom_minimum_size = Vector2(224, 0)
 
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.08, 0.09, 0.11, 0.82)
@@ -67,9 +67,9 @@ func _build() -> void:
 	grid.add_theme_constant_override("v_separation", 6)
 	vbox.add_child(grid)
 
-	_add_button(grid, "取水站", PlacementController.Kind.WATER)
-	_add_button(grid, "取食站", PlacementController.Kind.FOOD)
-	_add_button(grid, "工作站", PlacementController.Kind.WORK)
+	_add_button(grid, "无限取水站", PlacementController.Kind.WATER)
+	_add_button(grid, "无限取食站", PlacementController.Kind.FOOD)
+	_add_button(grid, "无限工作站", PlacementController.Kind.WORK)
 	_add_button(grid, "居民", PlacementController.Kind.HUMAN)
 	_add_button(grid, "取消", PlacementController.Kind.NONE)
 
@@ -94,7 +94,7 @@ func _add_button(parent: GridContainer, text: String, kind: int) -> void:
 	var button := Button.new()
 	button.text = text
 	button.focus_mode = Control.FOCUS_NONE
-	button.custom_minimum_size = Vector2(92, 30)
+	button.custom_minimum_size = Vector2(98, 30)
 	button.pressed.connect(func() -> void: _on_button(kind))
 	parent.add_child(button)
 
@@ -103,11 +103,11 @@ func _on_button(kind: int) -> void:
 	_current_kind = kind
 	match kind:
 		PlacementController.Kind.WATER:
-			_mode_label.text = "放置：取水站"
+			_mode_label.text = "放置：无限取水站"
 		PlacementController.Kind.FOOD:
-			_mode_label.text = "放置：取食站"
+			_mode_label.text = "放置：无限取食站"
 		PlacementController.Kind.WORK:
-			_mode_label.text = "放置：工作站"
+			_mode_label.text = "放置：无限工作站"
 		PlacementController.Kind.HUMAN:
 			_mode_label.text = "放置：居民"
 		_:

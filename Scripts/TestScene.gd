@@ -73,22 +73,22 @@ func _setup_buildings() -> void:
 	var world := WorldGridGlobal.world
 
 	var water := WaterStation.new()
-	water.name = "取水站"
+	water.name = water.display_name
 	add_child(water)
 	if not water.place_at(world, WATER_ORIGIN):
-		push_error("取水站放不下")
+		push_error("%s 放不下" % water.display_name)
 
 	var food := FoodStation.new()
-	food.name = "取食站"
+	food.name = food.display_name
 	add_child(food)
 	if not food.place_at(world, FOOD_ORIGIN):
-		push_error("取食站放不下")
+		push_error("%s 放不下" % food.display_name)
 
 	var work := WorkStation.new()
-	work.name = "工作站"
+	work.name = work.display_name
 	add_child(work)
 	if not work.place_at(world, WORK_ORIGIN):
-		push_error("工作站放不下")
+		push_error("%s 放不下" % work.display_name)
 
 
 func _setup_humans() -> void:

@@ -16,6 +16,7 @@ func _init() -> void:
 	# 两个出入口：正上方和正下方各一个，用来验证「多出入口」的写法
 	entrance_offsets = [Vector2i(1, 3), Vector2i(2, -1)]
 	body_color = Color(0.95, 0.65, 0.2)
+	display_name = "无限取食站"
 
 
 func get_wait_ticks() -> int:

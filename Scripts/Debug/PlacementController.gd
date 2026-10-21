@@ -136,7 +136,7 @@ func place_at_cell(mouse_cell: Vector2i) -> bool:
 		return false
 
 	var building := _create_building(kind)
-	building.name = _kind_name(kind)
+	building.name = building.display_name
 	add_child(building)
 	if building.place_at(world, origin):
 		# 建筑压在原本站着人的格子上时，让人自己走出来
@@ -211,20 +211,6 @@ func _create_building(kind_value: Kind) -> Building:
 			return WorkStation.new()
 		_:
 			return Building.new()
-
-
-func _kind_name(kind_value: Kind) -> String:
-	match kind_value:
-		Kind.WATER:
-			return "取水站"
-		Kind.FOOD:
-			return "取食站"
-		Kind.WORK:
-			return "工作站"
-		Kind.HUMAN:
-			return "居民"
-		_:
-			return "建筑"
 
 
 func _clear_ghost() -> void:

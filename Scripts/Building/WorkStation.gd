@@ -19,6 +19,7 @@ func _init() -> void:
 	size_cells = Vector2i(6, 4)
 	entrance_offsets = [Vector2i(2, 4), Vector2i(3, -1)]
 	body_color = Color(0.45, 0.45, 0.5)
+	display_name = "无限工作站"
 
 
 func get_wait_ticks() -> int:
