@@ -170,6 +170,12 @@ func _place_human(cell: Vector2i) -> bool:
 		notice.emit("这一格是建筑或障碍，人站不进去")
 		return false
 
+	# 同一格已经站了人的话不给放，否则两个人会叠在一起（画面看起来「少人」）
+	for other in TickManager.humans:
+		if is_instance_valid(other) and world.world_to_cell(other.position) == cell:
+			notice.emit("这一格已经站了一个人了")
+			return false
+
 	var human := Human.new()
 	human.name = "居民%d" % (TickManager.humans.size() + 1)
 	human.position = world.cell_to_world(cell)

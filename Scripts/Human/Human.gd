@@ -242,14 +242,12 @@ func _start_goal(new_goal: Goal) -> void:
 		_go_idle()
 		return
 
-	# 从工作站里出来：先回到出入口格，再走去新目标
+	# 从工作站里出来：模型重新出现，人还站在出入口格上
 	if phase == Phase.INSIDE_WORK:
 		var old_station := target
 		if old_station is WorkStation:
 			old_station.leave(self)
-			var exit_cell := old_station.get_nearest_entrance_cell(WorldGridGlobal.world.world_to_cell(position))
-			position = WorldGridGlobal.world.cell_to_world(exit_cell)
-		modulate = Color.WHITE
+		show()
 
 	goal = new_goal
 	target = station
@@ -313,7 +311,7 @@ func evict_out() -> void:
 	# 如果人正在别的工作站里，先退出来
 	if phase == Phase.INSIDE_WORK and target is WorkStation:
 		target.leave(self)
-	modulate = Color.WHITE
+		show()
 
 	if new_path.is_empty():
 		# 被建筑整个包住、没有路可走：直接挪到最近的那块空地
@@ -399,11 +397,11 @@ func _finish_wait() -> void:
 		GlobalEnum.BuildingType.FOOD:
 			food = MAX_FOOD
 		GlobalEnum.BuildingType.WORK:
-			# 进入建筑内部：给他安排一个站内位置，半透明显示
+			# 进入建筑内部：模型隐藏（站内的人不画出来，统计里单独算）
 			phase = Phase.INSIDE_WORK
 			if target is WorkStation:
 				target.enter(self)
-			modulate = Color(1.0, 1.0, 1.0, 0.72)
+			hide()
 			queue_redraw()
 			return
 

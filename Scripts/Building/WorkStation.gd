@@ -25,26 +25,17 @@ func get_wait_ticks() -> int:
 	return WAIT_TICKS
 
 
-## 居民进门：给他安排一个内部站位
+## 居民进门：登记一下，模型在 [Human] 那边隐藏
 func enter(human: Human) -> void:
-	occupants.append(human)
-	human.position = _slot_position(occupants.size() - 1)
+	if not occupants.has(human):
+		occupants.append(human)
 
 
-## 居民出门：后面的人往前补一个位置，避免中间空一格
+## 居民出门：从名单里划掉
 func leave(human: Human) -> void:
 	occupants.erase(human)
-	for i in range(occupants.size()):
-		occupants[i].position = _slot_position(i)
 
 
-## 第 [param index] 个内部站位（从建筑内部左上角开始按格排开）
-func _slot_position(index: int) -> Vector2:
-	var cols := maxi(size_cells.x - 1, 1)
-	var col := index % cols
-	var row := index / cols
-	var cell := origin_cell + Vector2i(1 + col, 1 + row)
-	# 人多到排不下时，挤在最后一行
-	cell.x = clampi(cell.x, origin_cell.x, origin_cell.x + size_cells.x - 1)
-	cell.y = clampi(cell.y, origin_cell.y, origin_cell.y + size_cells.y - 1)
-	return WorldGridGlobal.world.cell_to_world(cell)
+## 现在里面还有几个人（调试面板用）
+func get_occupant_count() -> int:
+	return occupants.size()

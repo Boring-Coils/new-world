@@ -93,14 +93,19 @@ func _setup_buildings() -> void:
 
 func _setup_humans() -> void:
 	var world := WorldGridGlobal.world
+	var used_cells: Array[Vector2i] = []
+
 	for i in range(HUMAN_COUNT):
 		var human := Human.new()
 		human.name = "居民%d" % (i + 1)
 
-		var cell := Vector2i(
-			randi_range(HUMAN_SPAWN_MIN.x, HUMAN_SPAWN_MAX.x),
-			randi_range(HUMAN_SPAWN_MIN.y, HUMAN_SPAWN_MAX.y),
-		)
+		# 一人一格，避免两个人叠在同一个位置（画面上会「少人」）
+		var cell := _pick_free_cell(used_cells)
+		if cell == Vector2i(-1, -1):
+			push_warning("出生点不够用了，居民%d 没放出来" % (i + 1))
+			human.free()
+			break
+		used_cells.append(cell)
 		human.position = world.cell_to_world(cell)
 
 		# 混合不同年龄段，顺便验证速度和日耗的差异
@@ -116,6 +121,20 @@ func _setup_humans() -> void:
 				human.age = 70
 
 		add_child(human)
+
+	print("[SPAWN] %d 个居民放在 %d 个不同格子上" % [TickManager.humans.size(), used_cells.size()])
+
+
+## 在出生范围里随机挑一格还没被占用的
+func _pick_free_cell(used_cells: Array[Vector2i]) -> Vector2i:
+	for attempt in range(300):
+		var cell := Vector2i(
+			randi_range(HUMAN_SPAWN_MIN.x, HUMAN_SPAWN_MAX.x),
+			randi_range(HUMAN_SPAWN_MIN.y, HUMAN_SPAWN_MAX.y),
+		)
+		if not used_cells.has(cell):
+			return cell
+	return Vector2i(-1, -1)
 
 
 func _setup_ui() -> void:
@@ -199,7 +218,8 @@ func _process(_delta: float) -> void:
 	var weak := 0
 	var at_water := 0
 	var at_food := 0
-	var working := 0
+	var going_work := 0
+	var inside_work := 0
 	var idle := 0
 
 	for h in TickManager.humans:
@@ -207,21 +227,24 @@ func _process(_delta: float) -> void:
 			continue
 		if h.is_weak:
 			weak += 1
+		elif h.phase == Human.Phase.INSIDE_WORK:
+			# 已经进门了，模型是隐藏的，单独列出来
+			inside_work += 1
 		elif h.goal == Human.Goal.WATER:
 			at_water += 1
 		elif h.goal == Human.Goal.FOOD:
 			at_food += 1
 		elif h.goal == Human.Goal.WORK:
-			working += 1
+			going_work += 1
 		else:
 			idle += 1
 
-	_debug_ui.set_stats("第 %d 天 第 %d 刻\n取水 %d   取食 %d   工作 %d\n空闲 %d   虚弱 %d" % [
-		day, tick, at_water, at_food, working, idle, weak
+	_debug_ui.set_stats("第 %d 天 第 %d 刻\n取水 %d   取食 %d\n上班路上 %d   站内 %d\n空闲 %d   虚弱 %d" % [
+		day, tick, at_water, at_food, going_work, inside_work, idle, weak
 	])
 
 	# 调试模式：定期打印一份，跑满 _max_ticks 刻就退出
-	var ready_for_shot := TickManager.total_ticks >= 100
+	var ready_for_shot := TickManager.total_ticks >= 12
 	if _placer != null and _placer.debug_hover_cell.x >= 0 and TickManager.total_ticks >= 10:
 		ready_for_shot = true
 	if _shot_path != "" and not _shot_done and ready_for_shot:
@@ -232,8 +255,8 @@ func _process(_delta: float) -> void:
 		return
 	if TickManager.total_ticks - _last_report_tick >= 100:
 		_last_report_tick = TickManager.total_ticks
-		var line := "[SIM] tick=%d 取水%d 取食%d 工作%d 空闲%d 虚弱%d |" % [
-			TickManager.total_ticks, at_water, at_food, working, idle, weak
+		var line := "[SIM] tick=%d 取水%d 取食%d 上班%d 站内%d 空闲%d 虚弱%d |" % [
+			TickManager.total_ticks, at_water, at_food, going_work, inside_work, idle, weak
 		]
 		for h in TickManager.humans:
 			if not is_instance_valid(h):
