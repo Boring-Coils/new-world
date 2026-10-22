@@ -42,6 +42,17 @@ const WORK_WEIGHT: float = 10.0
 ## 改 [constant TickManager.TICKS_PER_DAY] 之后会自动换算成对应的刻数，不用手动改。
 const URGENT_GAME_SECONDS: float = 36.0 * 60.0
 
+## 成年人一天能走多少格。[br]
+## 这个是观感基准，等价于「现实每秒 2.5 格」：一天现实 300 秒 × 2.5 = 750 格。[br]
+## 每刻格数由它除以 [constant TickManager.TICKS_PER_DAY] 得出，所以改每天刻数会自动跟随。
+const WALK_CELLS_PER_DAY: float = 750.0
+
+## 儿童速度倍率（约为成年人的七成）。
+const CHILD_SPEED_SCALE: float = 0.71
+
+## 老年人速度倍率（约为成年人的八成半）。
+const OLD_SPEED_SCALE: float = 0.86
+
 ## 年龄
 @export var age: int = 20
 
@@ -84,9 +95,13 @@ var _tick_count: int = 0
 ## 决策相位：每个人的决策错开，避免全城同一刻一起涌向水站
 var _decision_offset: int = 0
 
+## 随机速度偏移（0.9~1.1），用于模拟不同居民的速度差异
+var _random_speed_offset: float = 1.0
+
 
 func _ready() -> void:
 	_decision_offset = randi() % DECISION_INTERVAL
+	_random_speed_offset = 0.9 + randf() * 0.2
 	TickManager.register_human(self)
 	queue_redraw()
 
@@ -158,15 +173,15 @@ func get_daily_food() -> float:
 
 
 ## 每刻能走几格。[br]
-## 换算：米/秒 × 每刻的游戏秒数 = 米/刻 = 格/刻（1 格 = 1 米）。
+## 由 [constant WALK_CELLS_PER_DAY] 除以 [constant TickManager.TICKS_PER_DAY] 得出，改每天刻数会自动跟随。
 func get_speed_cells_per_tick() -> float:
-	var meters_per_second := 1.4  # 成年人正常步行
+	var scale := 1.0
 	match age_status:
 		GlobalEnum.AgeStatus.CHILD:
-			meters_per_second = 1.0
+			scale = CHILD_SPEED_SCALE
 		GlobalEnum.AgeStatus.OLD:
-			meters_per_second = 1.2
-	return meters_per_second * TickManager.GAME_SECONDS_PER_TICK
+			scale = OLD_SPEED_SCALE
+	return (WALK_CELLS_PER_DAY * scale / float(TickManager.TICKS_PER_DAY)) * _random_speed_offset
 
 
 ## 按当前的消耗速度，这些水还能撑多少刻
