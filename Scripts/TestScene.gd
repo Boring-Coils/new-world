@@ -36,6 +36,23 @@ var _shot_done: bool = false
 ## 调试用：启动后自动放一套建筑和居民，验证放置链路
 var _autoplace: bool = false
 
+## 调试用：buff 自检，跑到几个固定刻数时加 buff 并打印期望值对照（--bufftest）
+var _bufftest: bool = false
+
+## 调试用：buff 自检的阶段性标记
+var _buff_applied: bool = false
+var _buff_expiry_checked: bool = false
+var _buff_final_checked: bool = false
+
+## 调试用：口渴 buff 的引用，用来在它被移除后还能读到累积扣水量
+var _thirst_buff: Thirst = null
+
+## 调试用：口渴 buff 最后一次读到的累计扣水量
+var _thirst_total: float = 0.0
+
+## 调试用：眩晕期间有没有人还跑去上班（应该始终 false）
+var _buff_stun_violation: bool = false
+
 
 func _ready() -> void:
 	randomize()
@@ -96,7 +113,7 @@ func _setup_humans() -> void:
 	var used_cells: Array[Vector2i] = []
 
 	for i in range(HUMAN_COUNT):
-		var human := Human.new()
+		var human := Human.create()
 		human.name = "居民%d" % (i + 1)
 
 		# 一人一格，避免两个人叠在同一个位置（画面上会「少人」）
@@ -152,6 +169,8 @@ func _setup_ui() -> void:
 			_shot_path = arg.trim_prefix("--shot=")
 		elif arg == "--autoplace":
 			_autoplace = true
+		elif arg == "--bufftest":
+			_bufftest = true
 		elif arg.begins_with("--ghost="):
 			# 调试用：把放置预览钉在某一格，方便截图（参数形如 --ghost=477,500）
 			var parts := arg.trim_prefix("--ghost=").split(",")
@@ -215,7 +234,6 @@ func _process(_delta: float) -> void:
 
 	var day := TickManager.get_day()
 	var tick := TickManager.get_tick_of_day()
-	var weak := 0
 	var at_water := 0
 	var at_food := 0
 	var going_work := 0
@@ -225,9 +243,7 @@ func _process(_delta: float) -> void:
 	for h in TickManager.humans:
 		if not is_instance_valid(h):
 			continue
-		if h.is_weak:
-			weak += 1
-		elif h.phase == Human.Phase.INSIDE_WORK:
+		if h.phase == Human.Phase.INSIDE_WORK:
 			# 已经进门了，模型是隐藏的，单独列出来
 			inside_work += 1
 		elif h.goal == Human.Goal.WATER:
@@ -239,11 +255,13 @@ func _process(_delta: float) -> void:
 		else:
 			idle += 1
 
-	_debug_ui.set_stats("第 %d 天 第 %d 刻\n取水 %d   取食 %d\n上班路上 %d   站内 %d\n空闲 %d   虚弱 %d" % [
-		day, tick, at_water, at_food, going_work, inside_work, idle, weak
+	_debug_ui.set_stats("第 %d 天 第 %d 刻\n取水 %d   取食 %d\n上班路上 %d   站内 %d\n空闲 %d" % [
+		day, tick, at_water, at_food, going_work, inside_work, idle
 	])
 
 	# 调试模式：定期打印一份，跑满 _max_ticks 刻就退出
+	_run_buff_test()
+
 	var ready_for_shot := TickManager.total_ticks >= 12
 	if _placer != null and _placer.debug_hover_cell.x >= 0 and TickManager.total_ticks >= 10:
 		ready_for_shot = true
@@ -255,13 +273,13 @@ func _process(_delta: float) -> void:
 		return
 	if TickManager.total_ticks - _last_report_tick >= 100:
 		_last_report_tick = TickManager.total_ticks
-		var line := "[SIM] tick=%d 取水%d 取食%d 上班%d 站内%d 空闲%d 虚弱%d |" % [
-			TickManager.total_ticks, at_water, at_food, going_work, inside_work, idle, weak
+		var line := "[SIM] tick=%d 取水%d 取食%d 上班%d 站内%d 空闲%d |" % [
+			TickManager.total_ticks, at_water, at_food, going_work, inside_work, idle
 		]
 		for h in TickManager.humans:
 			if not is_instance_valid(h):
 				continue
-			line += " %s(水%.0f,食%.0f,%s/%s,格%s,路%d)%s" % [
+			line += " %s(水%.0f,食%.0f,%s/%s,格%s,路%d)" % [
 				h.name,
 				h.water,
 				h.food,
@@ -269,7 +287,6 @@ func _process(_delta: float) -> void:
 				Human.Phase.keys()[h.phase],
 				WorldGridGlobal.world.world_to_cell(h.position),
 				h.path.size(),
-				"虚弱" if h.is_weak else "",
 			]
 		print(line)
 
@@ -304,3 +321,91 @@ func _unhandled_input(event: InputEvent) -> void:
 			_:
 				return
 		print("[SIM] 倍速 x%.0f" % TickManager.speed_multiplier)
+
+
+# ---------------------------------------------------------------------------
+# buff 自检（--bufftest，测完连同下面几个函数一起删）
+# ---------------------------------------------------------------------------
+
+## 取第几个居民，越界返回 null
+func _get_human(index: int) -> Human:
+	if index < 0 or index >= TickManager.humans.size():
+		return null
+	var h := TickManager.humans[index]
+	if not is_instance_valid(h):
+		return null
+	return h
+
+
+## buff 自检：加三种 buff，在三个时间点打印「期望 vs 实际」。[br]
+## 用法：[code]-- --speed=20 --bufftest --max-ticks=140[/code][br]
+## 覆盖四件事：数值倍率（疲劳）、行为闸门（眩晕）、每刻逻辑（口渴）、重复添加与自动到期。[br]
+## 速度那里用「反推随机偏移」来验倍率：居民 1 是儿童，基础速度算得出来，[br]
+## 反推值落回 0.9~1.1 就说明倍率确实乘上去了。
+func _run_buff_test() -> void:
+	if not _bufftest:
+		return
+	var tick := TickManager.total_ticks
+
+	# 口渴到期那一刻节点就被移除了，先趁它还活着把累计值抄出来
+	if _thirst_buff != null and is_instance_valid(_thirst_buff):
+		_thirst_total = _thirst_buff.drained_total
+
+	# 眩晕期间不该出现「去上班」这个目标
+	if _buff_applied:
+		var watched := _get_human(1)
+		if watched != null and watched.goal == Human.Goal.WORK:
+			_buff_stun_violation = true
+
+	if not _buff_applied and tick >= 10:
+		_buff_applied = true
+		var tired := _get_human(0)
+		var stunned := _get_human(1)
+		var thirsty := _get_human(2)
+		if tired == null or stunned == null or thirsty == null:
+			print("[BUFF] 居民数量不足，跳过自检")
+			return
+
+		# 疲劳加两次：第一次新建，第二次走 reapply（层数 +1、时长刷满）
+		tired.buff_system.add_buff(GlobalEnum.BuffType.FATIGUE, {"duration": 120, "intensity": 0.5})
+		var fatigue := tired.buff_system.add_buff(GlobalEnum.BuffType.FATIGUE, {"duration": 120, "intensity": 0.5})
+		stunned.buff_system.add_buff(GlobalEnum.BuffType.STUN, {"duration": 120})
+		_thirst_buff = thirsty.buff_system.add_buff(GlobalEnum.BuffType.THIRST, {"duration": 40, "drain": 5.0}) as Thirst
+
+		print("[BUFF] 疲劳 层数=%d（期望 2）速度倍率=%.2f（期望 0.10）" % [
+			fatigue.stacks, tired.buff_system.get_speed_multiplier()
+		])
+		print("[BUFF] 眩晕 can_work=%s（期望 false）速度倍率=%.2f（期望 0.50）" % [
+			stunned.buff_system.can_work(), stunned.buff_system.get_speed_multiplier()
+		])
+		print("[BUFF] 口渴 每刻扣水=%.1f（期望 5.0）时长=%d（期望 40）" % [
+			_thirst_buff.drain, _thirst_buff.duration
+		])
+
+	if _buff_applied and not _buff_expiry_checked and tick >= 60:
+		_buff_expiry_checked = true
+		var thirsty := _get_human(2)
+		print("[BUFF] 口渴已自动移除=%s（期望 true）累计额外扣水=%.1f（期望 200.0）" % [
+			not thirsty.buff_system.has_buff(GlobalEnum.BuffType.THIRST), _thirst_total
+		])
+
+	if _buff_applied and not _buff_final_checked and tick >= 100:
+		_buff_final_checked = true
+		var tired := _get_human(0)
+		var stunned := _get_human(1)
+		var normal := _get_human(3)
+		var base_child := Human.WALK_CELLS_PER_DAY * Human.CHILD_SPEED_SCALE / float(TickManager.TICKS_PER_DAY)
+		var tired_speed := tired.get_speed_cells_per_tick()
+		var normal_speed := normal.get_speed_cells_per_tick()
+
+		print("[BUFF] 疲劳仍在=%s 眩晕仍在=%s（都期望 true）" % [
+			tired.buff_system.has_buff(GlobalEnum.BuffType.FATIGUE),
+			stunned.buff_system.has_buff(GlobalEnum.BuffType.STUN),
+		])
+		print("[BUFF] 每刻格数 居民1(疲劳×2)=%.4f 反推随机偏移=%.3f（应 0.900~1.100）" % [
+			tired_speed, tired_speed / (base_child * 0.1)
+		])
+		print("[BUFF] 每刻格数 居民4(无buff)=%.4f 反推随机偏移=%.3f（应 0.900~1.100）" % [
+			normal_speed, normal_speed / base_child
+		])
+		print("[BUFF] 眩晕期间跑去上班=%s（期望 false）" % _buff_stun_violation)

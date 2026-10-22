@@ -174,7 +174,7 @@ func _place_human(cell: Vector2i) -> bool:
 			notice.emit("这一格已经站了一个人了")
 			return false
 
-	var human := Human.new()
+	var human := Human.create()
 	human.name = "居民%d" % (TickManager.humans.size() + 1)
 	human.position = world.cell_to_world(cell)
 

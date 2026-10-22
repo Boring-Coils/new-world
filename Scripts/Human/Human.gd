@@ -9,7 +9,8 @@ class_name Human
 ## - 已经在去水 / 去食物的路上（移动或等待中）时，不改变目标[br]
 ## 权重用「还剩多少刻」而不是「还剩多少毫升」来算，这样儿童（日耗小）和成人[br]
 ## 会在各自「还剩同样久」的时候动身，不会因为总量一样就一起跑水站。[br]
-## 水或食物掉到 0 以下会进入虚弱状态，暂时只会停在原地。
+## 水或食物掉到 0 以下本身不会立刻发生什么——虚弱、受伤这类状态统一由 [BuffSystem] 管理，[br]
+## 本类只管「怎么走、怎么消耗、怎么决策」，具体状态效果一律问 [member buff_system]。
 
 ## 居民想干什么
 enum Goal {
@@ -83,8 +84,8 @@ var path_index: int = 0
 ## 还要在这个出入口等几刻
 var wait_left: int = 0
 
-## 是否虚弱
-var is_weak: bool = false
+## 挂在身上的状态效果，子节点，见 [BuffSystem]
+@onready var buff_system: BuffSystem = $BuffSystem
 
 ## 是否正在「被新建筑挤出来」，这段时间不做新决策
 var _is_relocating: bool = false
@@ -97,6 +98,13 @@ var _decision_offset: int = 0
 
 ## 随机速度偏移（0.9~1.1），用于模拟不同居民的速度差异
 var _random_speed_offset: float = 1.0
+
+
+## 创建一个居民节点。[br]
+## 居民身上的子节点（比如 [BuffSystem]）都写在 Human.tscn 里，所以别直接 [code]Human.new()[/code]——[br]
+## 那样建出来的节点没有子节点，[member buff_system] 会是 null（踩过一次）。
+static func create() -> Human:
+	return load("res://Scenes/Human/Human.tscn").instantiate() as Human
 
 
 func _ready() -> void:
@@ -114,10 +122,18 @@ func _exit_tree() -> void:
 func on_tick() -> void:
 	_tick_count += 1
 
-	_consume()
+	# buff 先结算：它在这一刻造成的影响（额外掉水、状态推进）要在下面扣消耗和做决策之前生效
+	buff_system.on_tick()
 
-	if is_weak:
-		return
+	# 正在上班 / 去上班的路上被 buff 禁了工作（比如刚眩晕）：立刻停下。
+	# 不能等到下一次决策——那要最多 DECISION_INTERVAL 刻，人会照常上完这一趟班
+	if goal == Goal.WORK and not buff_system.can_work():
+		if phase == Phase.INSIDE_WORK and target is WorkStation:
+			target.leave(self)
+			show()
+		_go_idle()
+
+	_consume()
 
 	# 每个人的决策时刻错开：错相位后依然是每 5 刻一次
 	if (_tick_count + _decision_offset) % DECISION_INTERVAL == 0:
@@ -134,20 +150,11 @@ func on_tick() -> void:
 # 消耗
 # ---------------------------------------------------------------------------
 
-## 每刻扣水扣食物
+## 每刻扣水扣食物，倍率由 buff 汇总（比如口渴会让水掉得更快）
 func _consume() -> void:
-	water -= get_daily_water() / float(TickManager.TICKS_PER_DAY)
-	food -= get_daily_food() / float(TickManager.TICKS_PER_DAY)
-
-	if not is_weak and (water < 0.0 or food < 0.0):
-		is_weak = true
-		goal = Goal.NONE
-		phase = Phase.IDLE
-		path.clear()
-		target = null
-		show()
-		push_warning("%s 进入虚弱状态（水 %.1f / 食物 %.1f）" % [name, water, food])
-		queue_redraw()
+	var consume_scale := buff_system.get_consume_multiplier()
+	water -= get_daily_water() / float(TickManager.TICKS_PER_DAY) * consume_scale
+	food -= get_daily_food() / float(TickManager.TICKS_PER_DAY) * consume_scale
 
 
 ## 每日耗水量（ml）
@@ -181,7 +188,7 @@ func get_speed_cells_per_tick() -> float:
 			scale = CHILD_SPEED_SCALE
 		GlobalEnum.AgeStatus.OLD:
 			scale = OLD_SPEED_SCALE
-	return (WALK_CELLS_PER_DAY * scale / float(TickManager.TICKS_PER_DAY)) * _random_speed_offset
+	return (WALK_CELLS_PER_DAY * scale / float(TickManager.TICKS_PER_DAY)) * _random_speed_offset * buff_system.get_speed_multiplier()
 
 
 ## 按当前的消耗速度，这些水还能撑多少刻
@@ -200,9 +207,6 @@ func get_food_ticks_left() -> float:
 
 ## 比较三个权重，决定接下来干什么
 func _decide() -> void:
-	if is_weak:
-		return
-
 	# 正在被新建筑挤出来，先把路走完
 	if _is_relocating:
 		return
@@ -211,20 +215,31 @@ func _decide() -> void:
 	if goal in [Goal.WATER, Goal.FOOD] and phase in [Phase.MOVING, Phase.WAITING]:
 		return
 
-	# 权重 = (提前量刻数 × 工作权重) ÷ 还能撑几刻
+	# 权重 = (提前量刻数 × 工作权重) ÷ 还能撑几刻，最后再乘 buff 给的倍率
 	var urgent_ticks := URGENT_GAME_SECONDS / TickManager.GAME_SECONDS_PER_TICK
 	var weight_scale := urgent_ticks * WORK_WEIGHT
-	var water_weight := weight_scale / maxf(get_water_ticks_left(), 1.0)
-	var food_weight := weight_scale / maxf(get_food_ticks_left(), 1.0)
+	var water_weight := weight_scale / maxf(get_water_ticks_left(), 1.0) * buff_system.get_weight_multiplier(Goal.WATER)
+	var food_weight := weight_scale / maxf(get_food_ticks_left(), 1.0) * buff_system.get_weight_multiplier(Goal.FOOD)
 
-	# 平手时优先级：水 > 食物 > 工作
-	var best_goal: Goal = Goal.WORK
-	var best_weight := WORK_WEIGHT
+	# 平手时优先级：水 > 食物 > 工作；被 buff 禁掉的工作直接不参加比较
+	var best_goal: Goal = Goal.NONE
+	var best_weight := 0.0
+	if buff_system.can_work():
+		var work_weight := WORK_WEIGHT * buff_system.get_weight_multiplier(Goal.WORK)
+		if work_weight > best_weight:
+			best_weight = work_weight
+			best_goal = Goal.WORK
 	if water_weight > best_weight:
 		best_weight = water_weight
 		best_goal = Goal.WATER
 	if food_weight > best_weight:
 		best_goal = Goal.FOOD
+
+	# 一个都不想干（比如被 buff 全禁了）：原地待着，别硬塞一个目标
+	if best_goal == Goal.NONE:
+		if goal != Goal.NONE:
+			_go_idle()
+		return
 
 	if best_goal == goal:
 		return
@@ -234,6 +249,11 @@ func _decide() -> void:
 
 ## 开始执行新目标
 func _start_goal(new_goal: Goal) -> void:
+	# 被 buff 禁掉的目标不发车（决策那边已经跳过，这里兜底，防止别处直接调进来）
+	if new_goal == Goal.WORK and not buff_system.can_work():
+		_go_idle()
+		return
+
 	var type: GlobalEnum.BuildingType
 	match new_goal:
 		Goal.WATER:
@@ -328,8 +348,7 @@ func evict_out() -> void:
 		position = world.cell_to_world(target_cell)
 		_is_relocating = false
 		_go_idle()
-		if not is_weak:
-			_decide()
+		_decide()
 		return
 
 	goal = Goal.NONE
@@ -377,8 +396,7 @@ func _arrive() -> void:
 		phase = Phase.IDLE
 		goal = Goal.NONE
 		queue_redraw()
-		if not is_weak:
-			_decide()
+		_decide()
 		return
 
 	phase = Phase.WAITING
@@ -418,8 +436,7 @@ func _finish_wait() -> void:
 	# 补给完了，马上重新决策一次，不干等下一个 5 刻
 	target = null
 	_go_idle()
-	if not is_weak:
-		_decide()
+	_decide()
 
 
 # ---------------------------------------------------------------------------
@@ -452,8 +469,6 @@ func _draw() -> void:
 
 ## 衣服颜色 = 当前状态
 func _get_outfit_color() -> Color:
-	if is_weak:
-		return Color(0.45, 0.45, 0.45)  # 虚弱：灰
 	match goal:
 		Goal.WATER:
 			return Color(0.30, 0.65, 0.95)  # 去取水：蓝
