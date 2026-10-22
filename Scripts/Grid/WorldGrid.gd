@@ -2,15 +2,12 @@ extends RefCounted
 class_name WorldGrid
 
 ## 世界网格寻路工具。[br]
-##
 ## 把整个游戏世界均匀切成固定大小的正方形格子，并基于 [AStarGrid2D] 提供 A* 寻路能力。[br]
-##
 ## [b]坐标约定（非常重要）：[/b][br]
 ## - 世界每格边长为 [constant CELL_SIZE] 像素，[code](0, 0)[/code] 表示左上角第一格。[br]
 ## - 本类所有对外函数接收 / 返回的坐标，除名字里带 "world" 的以外，[br]
 ##   一律为格子坐标（[code]Vector2i[/code]，即第几列、第几行），而不是像素坐标。[br]
-##
-## [b]典型用法：[/b]
+## [b]典型用法：[/b][br]
 ## [codeblock]
 ## var grid := WorldGrid.new(Vector2i(200, 150))   # 世界共 200 列 × 150 行
 ## grid.set_walkable(Vector2i(3, 4), false)        # 把 (3, 4) 设为墙，不可走
@@ -33,7 +30,6 @@ var _cells: Vector2i
 
 
 ## 构造函数。[br]
-##
 ## [param cells] 为世界被切成的格子数（横向 × 纵向），默认 [code](100, 100)[/code]，[br]
 ## 即世界大小为 [code]1000 × 1000[/code] 像素。
 func _init(cells: Vector2i = Vector2i(100, 100)) -> void:
@@ -77,7 +73,6 @@ func get_cells() -> Vector2i:
 # ---------------------------------------------------------------------------
 
 ## 设置某一格能不能走。[br]
-##
 ## [param cell] 为格子坐标；[param walkable] 为 [code]true[/code] 表示可走，[br]
 ## [code]false[/code] 表示不可走（相当于一堵墙）。
 func set_walkable(cell: Vector2i, walkable: bool) -> void:
@@ -100,12 +95,10 @@ func is_walkable(cell: Vector2i) -> bool:
 # ---------------------------------------------------------------------------
 
 ## 设置某一格的「通行代价」——也就是好不好走。[br]
-##
 ## [param cost] 是一个相对倍率：[br]
 ## - [code]1.0[/code]：普通地面（默认）。[br]
 ## - 小于 [code]1.0[/code]：更好走，例如 [code]0.5[/code] 表示只需一半代价，寻路会优先选择这些格子。[br]
 ## - 大于 [code]1.0[/code]：更难走，例如 [code]3.0[/code] 表示三倍代价，寻路会尽量绕开这些格子。[br]
-##
 ## 注意：代价再大也只是「不划算」，格子依然能走；[br]
 ## 要让格子彻底无法通行，请改用 [method set_walkable]。
 func set_walk_cost(cell: Vector2i, cost: float) -> void:
@@ -128,7 +121,6 @@ func get_walk_cost(cell: Vector2i) -> float:
 # ---------------------------------------------------------------------------
 
 ## 计算从格子 [param from] 到格子 [param to] 的最优路径。[br]
-##
 ## 返回值为途径的格子坐标序列（[code]Array[Vector2i][/code]，含起点与终点）。[br]
 ## 若无法到达（被墙完全隔开，或起点 / 终点本身不可走），返回空数组。
 func get_path(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
@@ -153,7 +145,6 @@ func get_path(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
 
 
 ## 找离 [param cell] 最近的一格可走地面（按一圈圈外扩找，只找方形范围内）。[br]
-##
 ## 用来把「被新建筑压住的人」挤到空地上去。找不到就返回原格子。
 func find_nearest_walkable(cell: Vector2i, max_radius: int = 60) -> Vector2i:
     if is_in_bounds(cell) and is_walkable(cell):
@@ -182,7 +173,6 @@ func cell_to_world(cell: Vector2i) -> Vector2:
 
 
 ## 把像素坐标（世界坐标）换算成它所在的格子坐标。[br]
-##
 ## 世界外的像素坐标会被夹到最边上的那一格，保证返回值永远合法。
 func world_to_cell(world: Vector2) -> Vector2i:
     var cell := Vector2i((world / CELL_SIZE).floor())

@@ -2,15 +2,12 @@ extends Node2D
 class_name Building
 
 ## 建筑基类。[br]
-##
-## 建筑一定是矩形，占 [member size_cells] 个格子（横向 × 纵向），
+## 建筑一定是矩形，占 [member size_cells] 个格子（横向 × 纵向），[br]
 ## 放置时左上角必须正好落在某一格的左上角（也就是 [member origin_cell] 是格子坐标，天然对齐）。[br]
-##
 ## [b]出入口：[/b]用相对坐标 [member entrance_offsets] 描述，是相对建筑左上角格子的偏移。[br]
-## 规则：出入口必须落在建筑矩形[b]外面[/b]、并且和建筑边相邻（只碰到角不算），
-## 这一格本身必须是空地（不能压别的建筑或遮挡物），但可以和别的建筑的出入口重合。
-##
-## [b]典型用法：[/b]
+## 规则：出入口必须落在建筑矩形[b]外面[/b]、并且和建筑边相邻（只碰到角不算），[br]
+## 这一格本身必须是空地（不能压别的建筑或遮挡物），但可以和别的建筑的出入口重合。[br]
+## [b]典型用法：[/b][br]
 ## [codeblock]
 ## var station := WaterStation.new()
 ## station.entrance_offsets = [Vector2i(2, -1)]   # 建筑正上方那一格
@@ -118,8 +115,7 @@ func is_entrance_cell(cell: Vector2i) -> bool:
 # ---------------------------------------------------------------------------
 
 ## 判断能不能放在 [param origin] 这个格子。不会修改任何状态。[br]
-##
-## 检查项：矩形在界内、本体内每格都是空的（没被别的建筑或遮挡物占）、
+## 检查项：矩形在界内、本体内每格都是空的（没被别的建筑或遮挡物占）、[br]
 ## 每个出入口在界内且是空地、且与建筑边相邻。
 func can_place_at(world: WorldGrid, origin: Vector2i) -> bool:
 	if size_cells.x <= 0 or size_cells.y <= 0:

@@ -2,7 +2,6 @@ extends Node2D
 class_name GridDisplay
 
 ## 网格显示：在地图上画出和 [WorldGrid] 完全对齐的白色细线。[br]
-##
 ## 只画摄像机看得到的那一块，不然 1000 × 1000 格全画出来会糊成一片白。
 
 ## 是否显示网格（默认开）

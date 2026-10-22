@@ -2,7 +2,6 @@ extends CanvasLayer
 class_name DebugUI
 
 ## 调试面板：显示时间 / 居民状态，并提供「放置建筑和居民」的按钮。[br]
-##
 ## 只负责界面，真正放东西的是 [PlacementController]。
 
 ## 选中了要放什么（值是 [enum PlacementController.Kind]）

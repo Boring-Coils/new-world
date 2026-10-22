@@ -2,11 +2,9 @@ extends Node2D
 class_name PlacementController
 
 ## 调试用放置工具。[br]
-##
-## 选中一种建筑或「居民」之后，鼠标位置会出现一个半透明预览：
+## 选中一种建筑或「居民」之后，鼠标位置会出现一个半透明预览：[br]
 ## 绿色描边 = 这一格能放，红色 = 不能放。左键放下，右键 / ESC 取消。[br]
-##
-## 建筑放置会走 [method Building.can_place_at] 的完整校验；
+## 建筑放置会走 [method Building.can_place_at] 的完整校验；[br]
 ## 居民只能放在可走的空地上（不能压在建筑或障碍上）。
 
 ## 可以放什么
