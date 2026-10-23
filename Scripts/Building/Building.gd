@@ -314,6 +314,15 @@ func set_preview_valid(valid: bool) -> void:
 	_update_preview_outline()
 
 
+## 开关这栋建筑的点选。[br]
+## 放置模式下必须关掉：Body 是 Button，会把左键点击吃掉，[br]
+## 结果就是「想在这一格放东西」变成「点开了这栋建筑的详情页」，放置也失败。
+func set_click_enabled(enabled: bool) -> void:
+	if _body_button == null:
+		return
+	_body_button.mouse_filter = Control.MOUSE_FILTER_STOP if enabled else Control.MOUSE_FILTER_IGNORE
+
+
 func _on_body_pressed() -> void:
 	clicked.emit(self)
 

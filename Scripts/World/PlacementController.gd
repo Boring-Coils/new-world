@@ -58,7 +58,18 @@ func select_kind(new_kind: int) -> void:
 		_ghost.visible = false
 		add_child(_ghost)
 
+	# 进了放置模式就把已有建筑的点选关掉，退出时再打开
+	_set_buildings_clickable(kind == Kind.NONE)
 	queue_redraw()
+
+
+## 放置模式下，已有建筑不能再被点开详情页。[br]
+## 建筑的 Body 是 Button，[constant Control.MOUSE_FILTER_STOP] 会把左键点击吃掉，[br]
+## 于是「想在这格放东西」就变成了「点开了这栋建筑」，本节点的放置逻辑根本收不到事件。
+func _set_buildings_clickable(enabled: bool) -> void:
+	for building in TickManager.buildings:
+		if is_instance_valid(building):
+			building.set_click_enabled(enabled)
 
 
 ## 取消当前放置
@@ -135,6 +146,8 @@ func place_at_cell(mouse_cell: Vector2i) -> bool:
 	var building := _create_building(kind)
 	building.name = building.display_name
 	add_child(building)
+	# 还停在这个模式里的话，新建筑同样不能被点开
+	building.set_click_enabled(kind == Kind.NONE)
 	if building.place_at(world, origin):
 		# 建筑压在原本站着人的格子上时，让人自己走出来
 		_evict_humans_in(building)
