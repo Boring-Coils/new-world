@@ -110,6 +110,7 @@ static func create() -> Human:
 func _ready() -> void:
 	_decision_offset = randi() % DECISION_INTERVAL
 	_random_speed_offset = 0.9 + randf() * 0.2
+	buff_system.attach(self)
 	TickManager.register_human(self)
 	queue_redraw()
 
