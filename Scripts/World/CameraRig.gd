@@ -8,6 +8,7 @@ class_name CameraRig
 ## 操作：[br]
 ## - 中键按住拖动：鼠标往哪拖，画面就往哪走[br]
 ## - [code]WASD[/code] / 方向键：持续平移（触控板没有中键时用这个）[br]
+## - 滚轮：以屏幕中心缩放[br]
 ## 平移速度按「屏幕像素/秒」算，再除以缩放，所以放大以后拖起来手感不变。
 
 ## 相机初始对着哪里（格坐标）
@@ -67,13 +68,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		_dragging = event.pressed
 		return
 
-	# 滚轮缩放，以鼠标所指的位置为中心
+	# 滚轮缩放，以屏幕中心为锚点（相机本来就盯着屏幕正中，所以只改 zoom 就行）
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			_zoom_at(ZOOM_STEP, get_viewport().get_mouse_position())
+			_zoom(ZOOM_STEP)
 			return
 		if event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			_zoom_at(1.0 / ZOOM_STEP, get_viewport().get_mouse_position())
+			_zoom(1.0 / ZOOM_STEP)
 			return
 
 	if event is InputEventMouseMotion and _dragging:
@@ -81,23 +82,18 @@ func _unhandled_input(event: InputEvent) -> void:
 		_camera.position -= event.relative / _camera.zoom
 
 
-## 以屏幕上 [param screen_point] 这个点为中心缩放。[br]
-## 做法：先算出鼠标底下那个世界坐标点，改完缩放再把相机挪回去，
-## 这样鼠标指着的地方缩放前后待在原地，不会「一滚就跑偏」。[br]
-## 单独拆出来（不自己读鼠标位置）是为了能直接喂参数测。
-func _zoom_at(factor: float, screen_point: Vector2) -> void:
+## 缩放 [param factor] 倍，[b]以屏幕中心为锚点[/b]。[br]
+## 相机永远盯着屏幕正中（Camera2D 默认的 drag center 模式），所以「中心不动」在这里
+## 就等于「只改 zoom、不动 position」——不用算鼠标底下的世界点。
+func _zoom(factor: float) -> void:
 	if _camera == null:
 		return
 
-	var offset := screen_point - get_viewport_rect().size * 0.5
-	var zoom_old := _camera.zoom.x
-	var zoom_new := clampf(zoom_old * factor, ZOOM_MIN, ZOOM_MAX)
-	if is_equal_approx(zoom_old, zoom_new):
+	var zoom_new := clampf(_camera.zoom.x * factor, ZOOM_MIN, ZOOM_MAX)
+	if is_equal_approx(_camera.zoom.x, zoom_new):
 		return
 
-	var world_under_mouse := _camera.position + offset / zoom_old
 	_camera.zoom = Vector2(zoom_new, zoom_new)
-	_camera.position = world_under_mouse - offset / zoom_new
 
 
 ## 当前相机，给需要知道视野范围的代码用
