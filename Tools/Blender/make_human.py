@@ -35,6 +35,16 @@ WALK_FRAMES = 8
 LEG_SWING = 26.0   # 腿摆幅（度）
 ARM_SWING = 20.0   # 手臂摆幅（度）
 
+## 三个视角。镜头固定在 -Y 方向，靠转动角色本身来换朝向：
+##   side = 朝 +X（画面右；游戏里往左走用镜像）
+##   down = 朝 -Y（面向镜头 = 游戏里往下走）
+##   up   = 朝 +Y（背对镜头 = 游戏里往上走）
+VIEWS = {
+    "side": 0.0,
+    "down": -90.0,
+    "up": 90.0,
+}
+
 
 def setup_scene():
     bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -166,16 +176,31 @@ def build_character():
     # 头发是「扣在头顶的帽子」：往后偏一点、压扁，脸（+X 那面）要露出来，
     # 否则从侧面看整个头都是头发颜色，像戴了个头盔。
     parts["head"] = sphere("Head", 0.25, (0.0, 0.0, 1.35), skin)
-    parts["hair"] = sphere("Hair", 0.26, (-0.035, 0.0, 1.45), hair_mat, (1.0, 1.0, 0.55))
+    parts["hair"] = sphere("Hair", 0.26, (-0.03, 0.0, 1.48), hair_mat, (1.0, 1.0, 0.70))
 
     # 鼻子：侧面能一眼看出朝哪边（小方块，朝 +X 凸出去）
     parts["nose"] = box("Nose", (0.07, 0.07, 0.07), (0.25, 0.0, 1.33), skin)
 
-    # 眼睛：只做朝相机一侧的那只（y 为负），贴在头表面外侧
+    # 眼睛：两只都做。侧面看时远的那只被头挡住，正面看时两只都在
     eye_mat = make_material("Eye", (0.12, 0.12, 0.15), 0.5)
-    parts["eye"] = box("Eye", (0.05, 0.06, 0.06), (0.20, -0.14, 1.36), eye_mat)
+    parts["eye_near"] = box("EyeNear", (0.05, 0.06, 0.06), (0.20, -0.14, 1.36), eye_mat)
+    parts["eye_far"] = box("EyeFar", (0.05, 0.06, 0.06), (0.20, 0.14, 1.36), eye_mat)
 
     return parts
+
+
+def build_rig(scene, parts):
+    """把所有部件挂到一个空物体下。
+
+    这样转动这个空物体就能让角色整体转向，而四肢的关键帧仍然是「相对身体」的角度，
+    三个视角共用同一套走路动画，不用重做。
+    """
+    rig = bpy.data.objects.new("Rig", None)
+    scene.collection.objects.link(rig)
+    for obj in parts.values():
+        obj.parent = rig
+        obj.matrix_parent_inverse = rig.matrix_world.inverted()
+    return rig
 
 
 # ---------------------------------------------------------------------------
@@ -207,23 +232,24 @@ def key_pose(parts, frame):
 # 渲染
 # ---------------------------------------------------------------------------
 
-def render_frames(scene, out_dir):
+def render_frames(scene, out_root, view_name):
+    out_dir = os.path.join(out_root, view_name)
     os.makedirs(out_dir, exist_ok=True)
     scene.render.filepath = os.path.join(out_dir, "idle_0.png")
     bpy.ops.render.render(write_still=True)
-    print("[BLENDER] idle_0.png")
 
     for i in range(WALK_FRAMES):
         scene.frame_set(i + 1)
         scene.render.filepath = os.path.join(out_dir, "walk_%d.png" % i)
         bpy.ops.render.render(write_still=True)
-        print("[BLENDER] walk_%d.png" % i)
+    print("[BLENDER] %s：idle 1 帧 + walk %d 帧" % (view_name, WALK_FRAMES))
 
 
 def main():
     scene = setup_scene()
     setup_camera(scene)
     parts = build_character()
+    rig = build_rig(scene, parts)
 
     # 建关键帧：1~9 帧，第 9 帧等于第 1 帧，循环回来不会抖
     for i in range(WALK_FRAMES + 1):
@@ -235,7 +261,11 @@ def main():
     for key in ("leg_near", "leg_far", "arm_near", "arm_far"):
         parts[key].rotation_euler = (0.0, 0.0, 0.0)
 
-    render_frames(scene, OUT_DIR)
+    for view_name, angle in VIEWS.items():
+        rig.rotation_euler = (0.0, 0.0, math.radians(angle))
+        scene.frame_set(1)
+        render_frames(scene, OUT_DIR, view_name)
+
     print("[BLENDER] 完成，输出目录：", OUT_DIR)
 
 

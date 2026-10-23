@@ -386,9 +386,9 @@ func _move() -> void:
 		var to_destination := destination - position
 		var distance := to_destination.length()
 
-		# 朝向跟着移动方向走（贴图朝右，往左就镜像）
-		if absf(to_destination.x) > 0.001:
-			visual.set_facing(to_destination.x > 0.0)
+		# 朝向跟着移动方向走（三个视角：左右用 side 镜像，上下用另外两套）
+		if to_destination.length_squared() > 0.000001:
+			visual.set_facing(to_destination)
 
 		if distance <= step:
 			position = destination

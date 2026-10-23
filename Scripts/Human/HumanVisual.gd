@@ -1,12 +1,14 @@
 extends Node2D
 class_name HumanVisual
 
-## 居民外观：Blender 渲染出来的 2D 序列帧，侧面朝右。[br]
-## 往左走时用 [member AnimatedSprite2D.flip_h] 水平镜像，所以只需要渲染一个朝向。[br]
-## [b]颜色只能是预设里的几种[/b]：每多一种颜色就要在 Blender 里重渲一整套图，[br]
+## 居民外观：Blender 渲染出来的 2D 序列帧。[br]
+## 每个颜色预设下有 [b]三个视角[/b]：side（朝右）、down（朝下/面向镜头）、up（朝上/背面）。[br]
+## 「朝左」不是单独渲染的，用 [member AnimatedSprite2D.flip_h] 把 side 镜像过去。[br]
+## [b]颜色只能是预设里的几种[/b]：每多一种颜色就要在 Blender 里重渲三套图，[br]
 ## 所以这里用 [member outfit] 指定「哪一套」，而不是让外面传一个 RGB 进来。
 
-## 预设表：枚举 → 素材目录 + 走路帧数。[br]
+## 预设表：枚举 → 素材根目录 + 走路帧数。[br]
+## 目录结构：<根目录>/side/、down/、up/，每个里面是 idle_0.png + walk_0..7.png。[br]
 ## 新增颜色：先在 [enum GlobalEnum.Outfit] 加一项，再在这里登记目录。
 const PRESETS := {
 	GlobalEnum.Outfit.BLUE: {
@@ -15,12 +17,23 @@ const PRESETS := {
 	},
 }
 
+## 素材里固定有三个视角，顺序无所谓，名字必须对上目录名
+const VIEWS: Array[String] = ["side", "down", "up"]
+
 ## 128 px 的贴图缩到 0.08，正好让小人约 8 个世界单位高（和原来的白模一致，
 ## 脚底落在 y ≈ +4 的位置）
 const SPRITE_SCALE: float = 0.08
 
 ## 走路动画的播放速度（帧/秒），和 Blender 里 12 fps 对齐
 const WALK_FPS: float = 12.0
+
+## 朝向
+enum Facing {
+	RIGHT, ## 朝右（side 不镜像）
+	LEFT,  ## 朝左（side 镜像）
+	DOWN,  ## 朝下（down 视角）
+	UP,    ## 朝上（up 视角）
+}
 
 ## 当前用的是哪一套颜色
 @export var outfit: GlobalEnum.Outfit = GlobalEnum.Outfit.BLUE:
@@ -31,6 +44,12 @@ const WALK_FPS: float = 12.0
 
 ## 精灵本体
 var _sprite: AnimatedSprite2D
+
+## 视角名 → 已经装好的帧。换朝向时只是换一份引用，不重新加载贴图
+var _frames: Dictionary = {}
+
+## 当前朝向，默认朝右
+var _facing: Facing = Facing.RIGHT
 
 ## 当前是不是在走路，避免每刻重复 play
 var _moving: bool = false
@@ -46,13 +65,37 @@ func _ready() -> void:
 	_apply_outfit()
 
 
-## 按当前预设换一套序列帧
+## 按当前预设，把三个视角的帧全部装好
 func _apply_outfit() -> void:
 	var preset: Dictionary = PRESETS.get(outfit, {})
 	if preset.is_empty():
 		push_warning("HumanVisual：没有登记这个颜色的素材 %s" % outfit)
 		return
-	_sprite.sprite_frames = _build_frames(preset["dir"], preset["walk_frames"])
+
+	_frames.clear()
+	for view in VIEWS:
+		_frames[view] = _build_frames(preset["dir"] + view + "/", preset["walk_frames"])
+	_apply_view()
+
+
+## 按当前朝向换帧、换镜像，并保持「在走 / 站着」的状态
+func _apply_view() -> void:
+	var view := "side"
+	var flip := false
+	match _facing:
+		Facing.LEFT:
+			view = "side"
+			flip = true
+		Facing.RIGHT:
+			view = "side"
+		Facing.DOWN:
+			view = "down"
+		Facing.UP:
+			view = "up"
+
+	if _frames.has(view):
+		_sprite.sprite_frames = _frames[view]
+	_sprite.flip_h = flip
 	_sprite.play("walk" if _moving else "idle")
 
 
@@ -92,8 +135,19 @@ func set_moving(moving: bool) -> void:
 		_sprite.play(animation_name)
 
 
-## 朝右走传 true，朝左走传 false（贴图本身朝右，往左靠镜像）
-func set_facing(right: bool) -> void:
-	if _sprite == null:
+## 由 [Human] 在移动时调用：按位移方向选朝向。[br]
+## 斜着走时取「偏得多的那个轴」，和大多数像素游戏的习惯一致。
+func set_facing(direction: Vector2) -> void:
+	if direction.length_squared() < 0.000001:
 		return
-	_sprite.flip_h = not right
+
+	var new_facing: Facing
+	if absf(direction.x) >= absf(direction.y):
+		new_facing = Facing.RIGHT if direction.x > 0.0 else Facing.LEFT
+	else:
+		new_facing = Facing.DOWN if direction.y > 0.0 else Facing.UP
+
+	if new_facing == _facing:
+		return
+	_facing = new_facing
+	_apply_view()
