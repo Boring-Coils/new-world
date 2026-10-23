@@ -19,6 +19,13 @@ const START_ZOOM := Vector2(4.0, 4.0)
 ## 方向键平移速度（屏幕像素 / 秒）
 const KEY_PAN_SPEED: float = 900.0
 
+## 滚轮每一格的缩放倍数
+const ZOOM_STEP: float = 1.1
+
+## 缩放上下限：太小看不清格子，太大全糊
+const ZOOM_MIN: float = 0.8
+const ZOOM_MAX: float = 16.0
+
 ## 相机本体
 var _camera: Camera2D
 
@@ -60,9 +67,37 @@ func _unhandled_input(event: InputEvent) -> void:
 		_dragging = event.pressed
 		return
 
+	# 滚轮缩放，以鼠标所指的位置为中心
+	if event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			_zoom_at(ZOOM_STEP, get_viewport().get_mouse_position())
+			return
+		if event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			_zoom_at(1.0 / ZOOM_STEP, get_viewport().get_mouse_position())
+			return
+
 	if event is InputEventMouseMotion and _dragging:
 		# 屏幕位移 ÷ 缩放 = 世界位移；减号表示「画面跟着鼠标走」
 		_camera.position -= event.relative / _camera.zoom
+
+
+## 以屏幕上 [param screen_point] 这个点为中心缩放。[br]
+## 做法：先算出鼠标底下那个世界坐标点，改完缩放再把相机挪回去，
+## 这样鼠标指着的地方缩放前后待在原地，不会「一滚就跑偏」。[br]
+## 单独拆出来（不自己读鼠标位置）是为了能直接喂参数测。
+func _zoom_at(factor: float, screen_point: Vector2) -> void:
+	if _camera == null:
+		return
+
+	var offset := screen_point - get_viewport_rect().size * 0.5
+	var zoom_old := _camera.zoom.x
+	var zoom_new := clampf(zoom_old * factor, ZOOM_MIN, ZOOM_MAX)
+	if is_equal_approx(zoom_old, zoom_new):
+		return
+
+	var world_under_mouse := _camera.position + offset / zoom_old
+	_camera.zoom = Vector2(zoom_new, zoom_new)
+	_camera.position = world_under_mouse - offset / zoom_new
 
 
 ## 当前相机，给需要知道视野范围的代码用

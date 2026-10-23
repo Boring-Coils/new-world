@@ -83,7 +83,7 @@ func _build() -> void:
 	vbox.add_child(HSeparator.new())
 
 	var help := Label.new()
-	help.text = "空格 暂停\n1~4 倍速\n中键拖动 / WASD 移动视角"
+	help.text = "空格 暂停\n1~4 倍速\n中键拖动 / WASD 移动视角\n滚轮 缩放"
 	help.add_theme_font_size_override("font_size", 12)
 	help.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.5))
 	vbox.add_child(help)
