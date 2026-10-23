@@ -261,7 +261,7 @@ func _build_visuals() -> void:
 	glyph.position = Vector2(size_px.x * 0.5 - symbol_size * 0.5, size_px.y * 0.6 - symbol_size * 0.5)
 	_glyph = glyph
 
-	# 出入口：黄色小广场
+	# 出入口：黄色格子
 	for offset in entrance_offsets:
 		var mark := ColorRect.new()
 		mark.color = Color(1.0, 0.85, 0.30, 0.75)
@@ -322,20 +322,17 @@ func _on_body_pressed() -> void:
 # 详情页内容（子类通过下面几个函数加内容 / 藏内容）
 # ---------------------------------------------------------------------------
 
-## 每次刷新前重建内容。子类覆盖时先 [code]super.build_detail()[/code] 再往里加。[br]
-## 默认给三个通用行，外加一个空的「状态」板块留给子类填；
-## 子类一行不加的话，空板块不会显示。
+## 每次刷新前由 [method get_detail_sections] 调用，往列表里加内容，子类覆盖它即可。[br]
+## [b]这里不要清空[/b]：清空由 [method get_detail_sections] 负责，所以子类先加后加、
+## 调不调 [code]super.build_detail()[/code] 都不会把自己的内容清掉。
 func build_detail() -> void:
-	_detail_sections.clear()
-	add_section("basic", "基本信息")
-	add_row("basic", "名称", display_name, "name")
-	add_row("basic", "占地", "%d × %d 格" % [size_cells.x, size_cells.y], "size")
-	add_row("basic", "出入口", "%d 个" % entrance_offsets.size(), "entrance")
 	add_section("status", "状态")
 
 
-## 给外面（详情页）取一份当前内容
+## 给外面（详情页）取一份当前内容。[br]
+## 每次调用都重建一遍（建筑数据每刻在变，缓存反而要处理失效），清空动作在这里做。
 func get_detail_sections() -> Array[Dictionary]:
+	_detail_sections.clear()
 	build_detail()
 	return _detail_sections
 

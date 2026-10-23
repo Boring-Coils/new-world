@@ -20,3 +20,8 @@ func _init() -> void:
 
 func get_wait_ticks() -> int:
 	return WAIT_TICKS
+
+## 详情页：加一行「食物储量」
+func build_detail() -> void:
+	super.build_detail()
+	add_row("status", "食物储量", "%d" %-1, "food")
