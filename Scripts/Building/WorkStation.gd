@@ -39,3 +39,9 @@ func leave(human: Human) -> void:
 ## 现在里面还有几个人（调试面板用）
 func get_occupant_count() -> int:
 	return occupants.size()
+
+
+## 详情页：在通用信息之上加一行「站内人数」
+func build_detail() -> void:
+	super.build_detail()
+	add_row("status", "站内人数", "%d 人" % occupants.size(), "occupants")

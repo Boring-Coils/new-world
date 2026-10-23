@@ -40,7 +40,35 @@ var is_preview: bool = false
 var preview_valid: bool = true
 
 
+## 点一下建筑时发出（预览用的虚影不发）[br]
+## 谁需要「选中建筑」就接这个信号，建筑本身不认识详情页。
+signal clicked(building: Building)
+
+## 建筑类型 → 图标贴图（放在 Assets/Icons/ 下，改图标只要换图）
+const GLYPH_TEXTURES: Dictionary = {
+	GlobalEnum.BuildingType.WATER: preload("res://Assets/Icons/water.png"),
+	GlobalEnum.BuildingType.FOOD: preload("res://Assets/Icons/food.png"),
+	GlobalEnum.BuildingType.WORK: preload("res://Assets/Icons/work.png"),
+}
+
+## 主体按钮：既是外观，也是点击区
+var _body_button: Button = null
+
+## 顶部深色檐口
+var _cornice: ColorRect = null
+
+## 类型图标
+var _glyph: TextureRect = null
+
+## 出入口的黄色小广场
+var _entrance_marks: Array[ColorRect] = []
+
+## 详情页的板块列表，见 [method build_detail]
+var _detail_sections: Array[Dictionary] = []
+
+
 func _ready() -> void:
+	_build_visuals()
 	if not is_preview:
 		TickManager.register_building(self)
 
@@ -176,63 +204,176 @@ func set_cell_origin(cell: Vector2i) -> void:
 
 
 # ---------------------------------------------------------------------------
-# 绘制（白模：没有贴图，全部用几何图形画）
+# 外观：用节点堆出来（按钮主体 + 檐口 + 图标 + 出入口）
 # ---------------------------------------------------------------------------
 
-func _draw() -> void:
+## 按 [member size_cells] 生成所有子节点。只在 [method _ready] 里调一次。[br]
+## 用节点而不是 [_draw] 画，是为了让主体本身就是一个 [Button]——点击区天然等于建筑大小，[br]
+## hover/pressed 状态和以后换贴图也都不用自己算。
+func _build_visuals() -> void:
 	var cell := float(WorldGrid.CELL_SIZE)
 	var size_px := Vector2(size_cells) * cell
-	var rect := Rect2(Vector2.ZERO, size_px)
 
-	var alpha := 0.45 if is_preview else 1.0
-	var outline := Color(0.12, 0.13, 0.16, alpha)
-	if is_preview:
-		outline = Color(0.35, 1.0, 0.45, 0.95) if preview_valid else Color(1.0, 0.35, 0.35, 0.95)
+	# 投影：稍微往右下错一点，看起来像浮在地上
+	var shadow := ColorRect.new()
+	shadow.name = "Shadow"
+	shadow.color = Color(0.0, 0.0, 0.0, 0.15)
+	shadow.position = Vector2(1.4, 2.0)
+	shadow.size = size_px
+	shadow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(shadow)
 
-	# 投影
-	draw_rect(Rect2(Vector2(1.4, 2.0), size_px), Color(0.0, 0.0, 0.0, 0.15 * alpha), true)
-	# 白色主体
-	draw_rect(rect, Color(0.94, 0.94, 0.91, alpha), true)
-	# 顶部一条深色檐口，看起来像建筑而不是一块板
-	draw_rect(Rect2(Vector2.ZERO, Vector2(size_px.x, size_px.y * 0.18)), Color(0.36, 0.37, 0.41, alpha), true)
-	# 描边
-	draw_rect(rect, outline, false, 1.6)
+	# 主体：一个铺满整块地的按钮
+	var body := Button.new()
+	body.name = "Body"
+	body.position = Vector2.ZERO
+	body.size = size_px
+	body.focus_mode = Control.FOCUS_NONE
+	body.add_theme_stylebox_override("normal", _make_body_style(Color(0.94, 0.94, 0.91)))
+	body.add_theme_stylebox_override("hover", _make_body_style(Color(1.0, 1.0, 0.97)))
+	body.add_theme_stylebox_override("pressed", _make_body_style(Color(0.86, 0.88, 0.94)))
+	body.pressed.connect(_on_body_pressed)
+	add_child(body)
+	_body_button = body
 
-	# 类型符号
-	_draw_type_symbol(Vector2(size_px.x * 0.5, size_px.y * 0.6), alpha)
+	# 檐口：顶部一条深色，让方块看起来像建筑
+	var cornice := ColorRect.new()
+	cornice.name = "Cornice"
+	cornice.color = Color(0.36, 0.37, 0.41)
+	cornice.position = Vector2.ZERO
+	cornice.size = Vector2(size_px.x, size_px.y * 0.18)
+	cornice.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	body.add_child(cornice)
+	_cornice = cornice
+
+	# 类型图标：从 Assets/Icons 读，按建筑大小等比缩放
+	# 注意：size / position 必须在 add_child 之后设——挂上去那一刻 Control 会按贴图原始尺寸
+	# 重算一次 size，先设会被盖掉（踩过一次，图标变成 128 像素糊满全屏）
+	var symbol_size := minf(size_px.x, size_px.y) * 0.34
+	var glyph := TextureRect.new()
+	glyph.name = "Glyph"
+	glyph.texture = GLYPH_TEXTURES.get(building_type)
+	glyph.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	glyph.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	glyph.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	body.add_child(glyph)
+	glyph.size = Vector2(symbol_size, symbol_size)
+	glyph.position = Vector2(size_px.x * 0.5 - symbol_size * 0.5, size_px.y * 0.6 - symbol_size * 0.5)
+	_glyph = glyph
 
 	# 出入口：黄色小广场
 	for offset in entrance_offsets:
-		var entrance_rect := Rect2(Vector2(offset) * cell, Vector2(cell, cell))
-		draw_rect(entrance_rect, Color(1.0, 0.85, 0.30, 0.75 * alpha), true)
-		draw_rect(entrance_rect, Color(0.45, 0.35, 0.05, alpha), false, 0.8)
+		var mark := ColorRect.new()
+		mark.color = Color(1.0, 0.85, 0.30, 0.75)
+		mark.position = Vector2(offset) * cell
+		mark.size = Vector2(cell, cell)
+		mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(mark)
+		_entrance_marks.append(mark)
+
+	_apply_preview_style()
 
 
-## 画建筑类型的小符号（水滴 / 碗 / 齿轮）
-func _draw_type_symbol(center: Vector2, alpha: float) -> void:
-	var color := Color(body_color.r, body_color.g, body_color.b, alpha)
-	var radius := minf(size_cells.x, size_cells.y) * float(WorldGrid.CELL_SIZE) * 0.17
+## 生成一份主体样式：纯色底 + 深色描边
+func _make_body_style(bg: Color) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = bg
+	style.border_color = Color(0.12, 0.13, 0.16)
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(1)
+	return style
 
-	match building_type:
-		GlobalEnum.BuildingType.WATER:
-			# 水滴：下面一个圆，上面一个三角
-			draw_circle(center + Vector2(0.0, radius * 0.55), radius * 0.8, color)
-			draw_colored_polygon(PackedVector2Array([
-				center + Vector2(-radius * 0.62, radius * 0.35),
-				center + Vector2(radius * 0.62, radius * 0.35),
-				center + Vector2(0.0, -radius * 1.45),
-			]), color)
-		GlobalEnum.BuildingType.FOOD:
-			# 碗：一条横线 + 下半圆
-			draw_line(center + Vector2(-radius, -radius * 0.15), center + Vector2(radius, -radius * 0.15), color, 1.6)
-			draw_arc(center + Vector2(0.0, -radius * 0.15), radius, 0.0, PI, 18, color, 1.6)
-		GlobalEnum.BuildingType.WORK:
-			# 齿轮：一个圆环 + 四根齿
-			draw_arc(center, radius * 0.72, 0.0, TAU, 20, color, 1.6)
-			for i in range(4):
-				var angle := TAU * float(i) / 4.0
-				var direction := Vector2(cos(angle), sin(angle))
-				draw_line(center + direction * radius * 0.72, center + direction * radius * 1.15, color, 1.6)
+
+## 预览模式：整体半透明，并且不接收鼠标（否则会把点击吃掉，放不下去东西）
+func _apply_preview_style() -> void:
+	if not is_preview:
+		return
+	modulate = Color(1.0, 1.0, 1.0, 0.45)
+	if _body_button != null:
+		_body_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_update_preview_outline()
+
+
+## 预览时按「能不能放」换描边颜色：绿 / 红
+func _update_preview_outline() -> void:
+	if not is_preview or _body_button == null:
+		return
+	var style := _make_body_style(Color(0.94, 0.94, 0.91, 0.35))
+	style.border_color = Color(0.35, 1.0, 0.45) if preview_valid else Color(1.0, 0.35, 0.35)
+	style.set_border_width_all(2)
+	_body_button.add_theme_stylebox_override("normal", style)
+	_body_button.add_theme_stylebox_override("hover", style)
+	_body_button.add_theme_stylebox_override("pressed", style)
+
+
+## 由 [PlacementController] 每帧调用，告诉预览「这一格现在能不能放」
+func set_preview_valid(valid: bool) -> void:
+	if preview_valid == valid:
+		return
+	preview_valid = valid
+	_update_preview_outline()
+
+
+func _on_body_pressed() -> void:
+	clicked.emit(self)
+
+
+# ---------------------------------------------------------------------------
+# 详情页内容（子类通过下面几个函数加内容 / 藏内容）
+# ---------------------------------------------------------------------------
+
+## 每次刷新前重建内容。子类覆盖时先 [code]super.build_detail()[/code] 再往里加。[br]
+## 默认给三个通用行，外加一个空的「状态」板块留给子类填；
+## 子类一行不加的话，空板块不会显示。
+func build_detail() -> void:
+	_detail_sections.clear()
+	add_section("basic", "基本信息")
+	add_row("basic", "名称", display_name, "name")
+	add_row("basic", "占地", "%d × %d 格" % [size_cells.x, size_cells.y], "size")
+	add_row("basic", "出入口", "%d 个" % entrance_offsets.size(), "entrance")
+	add_section("status", "状态")
+
+
+## 给外面（详情页）取一份当前内容
+func get_detail_sections() -> Array[Dictionary]:
+	build_detail()
+	return _detail_sections
+
+
+## 加一个板块（板块 id 自己定，用来往里面加行 / 隐藏）
+func add_section(id: String, title: String) -> void:
+	_detail_sections.append({"id": id, "title": title, "hidden": false, "rows": []})
+
+
+## 往某个板块里加一行。[param key] 是给 [method hide_row] 用的标识，不填就用 label。
+func add_row(section_id: String, label: String, value: String, key: String = "") -> void:
+	for section in _detail_sections:
+		if section["id"] == section_id:
+			section["rows"].append({
+				"key": key if key != "" else label,
+				"label": label,
+				"value": value,
+				"hidden": false,
+			})
+			return
+	push_warning("add_row：没有 %s 这个板块" % section_id)
+
+
+## 整个板块不显示
+func hide_section(id: String) -> void:
+	for section in _detail_sections:
+		if section["id"] == id:
+			section["hidden"] = true
+
+
+## 某一行不显示（板块里其它行照常）
+func hide_row(section_id: String, key: String) -> void:
+	for section in _detail_sections:
+		if section["id"] != section_id:
+			continue
+		for row in section["rows"]:
+			if row["key"] == key:
+				row["hidden"] = true
 
 
 # ---------------------------------------------------------------------------

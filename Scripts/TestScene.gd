@@ -274,23 +274,3 @@ func _take_screenshot() -> void:
 	var image := get_viewport().get_texture().get_image()
 	var err := image.save_png(_shot_path)
 	print("[SHOT] %s -> %s" % [_shot_path, "成功" if err == OK else "失败 %d" % err])
-
-
-## 调试快捷键：空格暂停/继续，数字 1~4 切倍速
-func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("ui_accept"):
-		TickManager.auto_run = not TickManager.auto_run
-		print("[SIM] 时间%s" % ("继续" if TickManager.auto_run else "暂停"))
-	elif event is InputEventKey and event.pressed and not event.echo:
-		match event.keycode:
-			KEY_1:
-				TickManager.speed_multiplier = 1.0
-			KEY_2:
-				TickManager.speed_multiplier = 2.0
-			KEY_3:
-				TickManager.speed_multiplier = 5.0
-			KEY_4:
-				TickManager.speed_multiplier = 20.0
-			_:
-				return
-		print("[SIM] 倍速 x%.0f" % TickManager.speed_multiplier)

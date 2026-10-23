@@ -103,10 +103,9 @@ func _update_hover() -> void:
 		var origin := _origin_for(_hover_cell)
 		_hover_valid = _ghost.can_place_at(world, origin)
 		_ghost.set_cell_origin(origin)
-		_ghost.preview_valid = _hover_valid
+		_ghost.set_preview_valid(_hover_valid)
 		# 鼠标停在 UI 按钮上时先不显示，免得虚影跑到面板底下
 		_ghost.visible = get_viewport().gui_get_hovered_control() == null
-		_ghost.queue_redraw()
 	elif kind == Kind.HUMAN:
 		_hover_valid = world.is_walkable(_hover_cell)
 

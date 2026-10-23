@@ -31,6 +31,10 @@ const GAME_SECONDS_PER_TICK: float = GAME_SECONDS_PER_DAY / float(TICKS_PER_DAY)
 ## 每推进一刻发出一次；参数依次为：累计刻数、第几天（从 0 开始）、当天第几刻（0 ~ 299）
 signal tick_advanced(total_ticks: int, day: int, tick_of_day: int)
 
+## 有新建筑登记时发出（放下的建筑，不含预览虚影）[br]
+## 详情页这类「想认识所有建筑」的东西连这个，就不用自己轮询。
+signal building_registered(building: Building)
+
 ## 每天第一刻发出一次
 signal day_advanced(day: int)
 
@@ -102,6 +106,7 @@ func get_tick_of_day() -> int:
 func register_building(building: Building) -> void:
 	if not buildings.has(building):
 		buildings.append(building)
+		building_registered.emit(building)
 
 
 ## 注销一个建筑
