@@ -66,6 +66,13 @@ const OLD_SPEED_SCALE: float = 0.86
 ## 当前储食物量（g）
 @export var food: float = MAX_FOOD
 
+## 衣服颜色。只能从预设里选（见 [enum GlobalEnum.Outfit]），不给自由 RGB。
+@export var outfit: GlobalEnum.Outfit = GlobalEnum.Outfit.BLUE:
+	set(value):
+		outfit = value
+		if is_instance_valid(visual):
+			visual.outfit = value
+
 ## 当前目标
 var goal: Goal = Goal.NONE
 
@@ -86,6 +93,9 @@ var wait_left: int = 0
 
 ## 挂在身上的状态效果，子节点，见 [BuffSystem]
 @onready var buff_system: BuffSystem = $BuffSystem
+
+## 外观节点，子节点，见 [HumanVisual]
+@onready var visual: HumanVisual = $Visual
 
 ## 是否正在「被新建筑挤出来」，这段时间不做新决策
 var _is_relocating: bool = false
@@ -111,8 +121,9 @@ func _ready() -> void:
 	_decision_offset = randi() % DECISION_INTERVAL
 	_random_speed_offset = 0.9 + randf() * 0.2
 	buff_system.attach(self)
+	visual.outfit = outfit
+	visual.set_moving(false)
 	TickManager.register_human(self)
-	queue_redraw()
 
 
 func _exit_tree() -> void:
@@ -145,6 +156,9 @@ func on_tick() -> void:
 			_move()
 		Phase.WAITING:
 			_update_wait()
+
+	# 表现层：在走路就播走路动画，其它时候站着
+	visual.set_moving(phase == Phase.MOVING)
 
 
 # ---------------------------------------------------------------------------
@@ -296,7 +310,6 @@ func _start_goal(new_goal: Goal) -> void:
 	path = new_path
 	path_index = 0
 	phase = Phase.MOVING
-	queue_redraw()
 
 
 ## 按切比雪夫距离找最近的一个建筑
@@ -321,7 +334,6 @@ func _go_idle() -> void:
 	path.clear()
 	path_index = 0
 	wait_left = 0
-	queue_redraw()
 
 
 ## 被新建筑压在下面时由建筑那边调用：自己走到最近的空地，走完再重新决策
@@ -359,7 +371,6 @@ func evict_out() -> void:
 	path_index = 0
 	phase = Phase.MOVING
 	_is_relocating = true
-	queue_redraw()
 
 
 # ---------------------------------------------------------------------------
@@ -374,6 +385,10 @@ func _move() -> void:
 		var destination := WorldGridGlobal.world.cell_to_world(path[path_index])
 		var to_destination := destination - position
 		var distance := to_destination.length()
+
+		# 朝向跟着移动方向走（贴图朝右，往左就镜像）
+		if absf(to_destination.x) > 0.001:
+			visual.set_facing(to_destination.x > 0.0)
 
 		if distance <= step:
 			position = destination
@@ -397,7 +412,6 @@ func _arrive() -> void:
 		_is_relocating = false
 		phase = Phase.IDLE
 		goal = Goal.NONE
-		queue_redraw()
 		_decide()
 		return
 
@@ -432,51 +446,9 @@ func _finish_wait() -> void:
 			if target is WorkStation:
 				target.enter(self)
 			hide()
-			queue_redraw()
 			return
 
 	# 补给完了，马上重新决策一次，不干等下一个 5 刻
 	target = null
 	_go_idle()
 	_decide()
-
-
-# ---------------------------------------------------------------------------
-# 绘制（测试用：一个色点）
-# ---------------------------------------------------------------------------
-
-func _draw() -> void:
-	# 白模小人：头 + 身体 + 四肢。衣服颜色表示当前在干什么。
-	var outfit := _get_outfit_color()
-	var skin := Color(0.96, 0.90, 0.83)
-	var outline := Color(0.13, 0.13, 0.17)
-
-	# 脚下的影子
-	draw_circle(Vector2(0.0, 4.2), 2.2, Color(0.0, 0.0, 0.0, 0.18))
-	# 腿
-	draw_line(Vector2(-1.0, 1.6), Vector2(-1.3, 4.0), outline, 0.9)
-	draw_line(Vector2(1.0, 1.6), Vector2(1.3, 4.0), outline, 0.9)
-	# 身体
-	draw_rect(Rect2(-1.6, -0.6, 3.2, 2.4), outfit, true)
-	draw_rect(Rect2(-1.6, -0.6, 3.2, 2.4), outline, false, 0.5)
-	# 手臂
-	draw_line(Vector2(-1.6, 0.0), Vector2(-2.4, 1.2), outline, 0.8)
-	draw_line(Vector2(1.6, 0.0), Vector2(2.4, 1.2), outline, 0.8)
-	# 头
-	draw_circle(Vector2(0.0, -2.1), 1.7, skin)
-	draw_arc(Vector2(0.0, -2.1), 1.7, 0.0, TAU, 14, outline, 0.5)
-	# 头发
-	draw_arc(Vector2(0.0, -2.2), 1.7, PI * 1.02, PI * 1.98, 10, Color(0.26, 0.21, 0.18), 0.9)
-
-
-## 衣服颜色 = 当前状态
-func _get_outfit_color() -> Color:
-	match goal:
-		Goal.WATER:
-			return Color(0.30, 0.65, 0.95)  # 去取水：蓝
-		Goal.FOOD:
-			return Color(0.95, 0.65, 0.20)  # 去取食：橙
-		Goal.WORK:
-			return Color(0.55, 0.45, 0.85)  # 上班：紫
-		_:
-			return Color(0.35, 0.75, 0.45)  # 空闲：绿
