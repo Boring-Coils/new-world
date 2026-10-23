@@ -183,13 +183,14 @@ func get_daily_food() -> float:
 ## 每刻能走几格。[br]
 ## 由 [constant WALK_CELLS_PER_DAY] 除以 [constant TickManager.TICKS_PER_DAY] 得出，改每天刻数会自动跟随。
 func get_speed_cells_per_tick() -> float:
-	var scale := 1.0
+	# 注意别叫 scale：Node2D 自带 scale 属性，同名会让变量把节点属性遮住
+	var speed_scale := 1.0
 	match age_status:
 		GlobalEnum.AgeStatus.CHILD:
-			scale = CHILD_SPEED_SCALE
+			speed_scale = CHILD_SPEED_SCALE
 		GlobalEnum.AgeStatus.OLD:
-			scale = OLD_SPEED_SCALE
-	return (WALK_CELLS_PER_DAY * scale / float(TickManager.TICKS_PER_DAY)) * _random_speed_offset * buff_system.get_speed_multiplier()
+			speed_scale = OLD_SPEED_SCALE
+	return (WALK_CELLS_PER_DAY * speed_scale / float(TickManager.TICKS_PER_DAY)) * _random_speed_offset * buff_system.get_speed_multiplier()
 
 
 ## 按当前的消耗速度，这些水还能撑多少刻

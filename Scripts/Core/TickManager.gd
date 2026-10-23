@@ -94,6 +94,8 @@ func advance_tick() -> void:
 
 ## 当前是第几天（从 0 开始）
 func get_day() -> int:
+	#显式忽略警告
+	@warning_ignore("integer_division")
 	return total_ticks / TICKS_PER_DAY
 
 
