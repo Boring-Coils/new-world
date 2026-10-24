@@ -21,6 +21,7 @@ enum BuffType{
 	FATIGUE,## 疲劳：移动变慢，可叠加
 	STUN,## 眩晕：不能工作，移动变慢
 	THIRST,## 口渴：每刻额外扣水
+	WEAKNESS,## 虚弱
 }
 
 ## 衣服颜色预设。[br]

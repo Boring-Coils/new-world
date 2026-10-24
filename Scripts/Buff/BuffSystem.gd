@@ -23,6 +23,7 @@ const REGISTRY: Dictionary = {
 	GlobalEnum.BuffType.FATIGUE: preload("res://Scripts/Buff/Types/Fatigue.gd"),
 	GlobalEnum.BuffType.STUN: preload("res://Scripts/Buff/Types/Stun.gd"),
 	GlobalEnum.BuffType.THIRST: preload("res://Scripts/Buff/Types/Thirst.gd"),
+	GlobalEnum.BuffType.WEAKNESS: preload("res://Scripts/Buff/Types/Weakness.gd"),
 }
 
 ## 当前挂着的 buff，顺序就是添加顺序（同顺序参与每刻结算）

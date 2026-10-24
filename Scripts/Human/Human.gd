@@ -170,6 +170,8 @@ func _consume() -> void:
 	var consume_scale := buff_system.get_consume_multiplier()
 	water -= get_daily_water() / float(TickManager.TICKS_PER_DAY) * consume_scale
 	food -= get_daily_food() / float(TickManager.TICKS_PER_DAY) * consume_scale
+	if water <= 0 or food <= 0:
+		buff_system.add_buff(GlobalEnum.BuffType.WEAKNESS)
 
 
 ## 每日耗水量（ml）
@@ -452,3 +454,6 @@ func _finish_wait() -> void:
 	target = null
 	_go_idle()
 	_decide()
+
+func die() -> void:
+	queue_free()

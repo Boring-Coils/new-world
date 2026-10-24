@@ -172,6 +172,28 @@ func _auto_test_placement() -> void:
 	_placer.select_kind(PlacementController.Kind.FOOD)
 	var blocked_ok := _placer.place_at_cell(Vector2i(500, 522))
 
+	# 本体压住已有水站出入口（但不压住水站本体），也应当失败
+	var world := WorldGridGlobal.world
+	var old_entrance := Vector2i(499, 522)
+	var entrance_was_walkable := world.is_walkable(old_entrance)
+	var buildings_before_entrance_test := TickManager.buildings.size()
+	_placer.select_kind(PlacementController.Kind.WATER)
+	var entrance_cover_ok := _placer.place_at_cell(Vector2i(499, 523))
+	var entrance_still_walkable := world.is_walkable(old_entrance)
+	var entrance_test_count_ok := TickManager.buildings.size() == buildings_before_entrance_test
+	var entrance_still_reachable := not world.get_path(Vector2i(500, 522), old_entrance).is_empty()
+	print("[AUTOPLACE] 本体压已有出入口(应 false)=%s 原出入口仍可走=%s 建筑未增加=%s 仍可达=%s" % [
+		entrance_cover_ok,
+		entrance_was_walkable and entrance_still_walkable,
+		entrance_test_count_ok,
+		entrance_still_reachable,
+	])
+
+	# 两栋建筑的出入口重合仍然允许
+	_placer.select_kind(PlacementController.Kind.FOOD)
+	var entrance_overlap_ok := _placer.place_at_cell(Vector2i(499, 524))
+	print("[AUTOPLACE] 出入口重叠(应 true)=%s" % entrance_overlap_ok)
+
 	_placer.select_kind(PlacementController.Kind.NONE)
 
 	print("[AUTOPLACE] 水站=%s 居民=%s 重叠(应 false)=%s 压建筑(应 false)=%s" % [

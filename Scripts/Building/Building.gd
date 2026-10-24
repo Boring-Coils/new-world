@@ -7,6 +7,7 @@ class_name Building
 ## [b]出入口：[/b]用相对坐标 [member entrance_offsets] 描述，是相对建筑左上角格子的偏移。[br]
 ## 规则：出入口必须落在建筑矩形[b]外面[/b]、并且和建筑边相邻（只碰到角不算），[br]
 ## 这一格本身必须是空地（不能压别的建筑或遮挡物），但可以和别的建筑的出入口重合。[br]
+## 建筑本体不能覆盖任何已有建筑的出入口。[br]
 ## [b]典型用法：[/b][br]
 ## [codeblock]
 ## var station := WaterStation.new()
@@ -93,11 +94,27 @@ func get_wait_ticks() -> int:
 
 ## 建筑本体占的所有格子（绝对坐标）
 func get_occupied_cells() -> Array[Vector2i]:
+	return _get_occupied_cells_at(origin_cell)
+
+
+## 按指定左上角算出建筑本体会占用的所有格子（不修改状态）。
+func _get_occupied_cells_at(origin: Vector2i) -> Array[Vector2i]:
 	var cells: Array[Vector2i] = []
-	for x in range(origin_cell.x, origin_cell.x + size_cells.x):
-		for y in range(origin_cell.y, origin_cell.y + size_cells.y):
+	for x in range(origin.x, origin.x + size_cells.x):
+		for y in range(origin.y, origin.y + size_cells.y):
 			cells.append(Vector2i(x, y))
 	return cells
+
+
+## 候选建筑的占格是否压住了任何已有建筑的出入口。
+func _overlaps_existing_entrance(footprint: Dictionary) -> bool:
+	for other in TickManager.buildings:
+		if not is_instance_valid(other) or other == self:
+			continue
+		for entrance in other.get_entrance_cells():
+			if footprint.has(entrance):
+				return true
+	return false
 
 
 ## 所有出入口的格子坐标（绝对坐标）
@@ -144,7 +161,7 @@ func is_entrance_cell(cell: Vector2i) -> bool:
 
 ## 判断能不能放在 [param origin] 这个格子。不会修改任何状态。[br]
 ## 检查项：矩形在界内、本体内每格都是空的（没被别的建筑或遮挡物占）、[br]
-## 每个出入口在界内且是空地、且与建筑边相邻。
+## 本体不覆盖已有建筑的出入口，且每个自己的出入口在界内、是空地并与建筑边相邻。
 func can_place_at(world: WorldGrid, origin: Vector2i) -> bool:
 	if size_cells.x <= 0 or size_cells.y <= 0:
 		return false
@@ -156,11 +173,16 @@ func can_place_at(world: WorldGrid, origin: Vector2i) -> bool:
 	if origin.x + size_cells.x > world_cells.x or origin.y + size_cells.y > world_cells.y:
 		return false
 
-	# 2. 本体内每一格都必须是空地
-	for x in range(origin.x, origin.x + size_cells.x):
-		for y in range(origin.y, origin.y + size_cells.y):
-			if not world.is_walkable(Vector2i(x, y)):
-				return false
+	# 2. 本体内每一格都必须是空地，且不能覆盖已有建筑的出入口
+	var candidate_cells := _get_occupied_cells_at(origin)
+	var footprint: Dictionary = {}
+	for cell in candidate_cells:
+		if not world.is_walkable(cell):
+			return false
+		footprint[cell] = true
+
+	if _overlaps_existing_entrance(footprint):
+		return false
 
 	# 3. 出入口：界内、在矩形外、和矩形边相邻、本身是空地
 	var rect := Rect2i(origin, size_cells)

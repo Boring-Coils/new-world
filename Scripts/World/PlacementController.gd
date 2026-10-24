@@ -140,7 +140,7 @@ func place_at_cell(mouse_cell: Vector2i) -> bool:
 
 	var origin := _origin_for(mouse_cell)
 	if not _ghost.can_place_at(world, origin):
-		notice.emit("这一格放不下：建筑或出入口被挡住了")
+		notice.emit("这一格放不下：建筑、出入口或已有建筑的出入口被挡住了")
 		return false
 
 	var building := _create_building(kind)

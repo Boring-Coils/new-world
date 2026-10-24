@@ -28,7 +28,7 @@ var stacks: int = 1
 func setup(p_type: GlobalEnum.BuffType, p_human: Human) -> void:
 	buff_type = p_type
 	human = p_human
-	name = GlobalEnum.BuffType.keys()[p_type]
+	name = GlobalEnum.BuffType.keys()[p_type]## name是节点名
 
 
 ## 第一次添加时调用，[param params] 是 [method BuffSystem.add_buff] 收到的参数字典。[br]
