@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="new_world"
-config/version="0.0.1"
+config/version="0.0.1a"
 run/main_scene="res://Scenes/Colony.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="uid://ofm4rbgt6kj8"
