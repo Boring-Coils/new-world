@@ -32,7 +32,7 @@ project/assembly_name="new_world"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/missbehave/plugin.cfg")
+enabled=PackedStringArray("res://addons/godot_state_charts/plugin.cfg")
 
 [physics]
 
