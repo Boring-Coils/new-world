@@ -399,3 +399,7 @@ func _is_edge_adjacent(cell: Vector2i, rect: Rect2i) -> bool:
 		or rect.has_point(cell + Vector2i.UP)
 		or rect.has_point(cell + Vector2i.DOWN)
 	)
+
+## 逻辑等待补全！！！
+func remove() -> void:
+	print("remove")

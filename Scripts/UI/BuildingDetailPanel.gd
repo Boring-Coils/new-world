@@ -22,6 +22,9 @@ var _body: VBoxContainer
 ## 当前选中的建筑（null = 没选中）
 var _current: Building = null
 
+## 底部「摧毁」按钮。固定不滚，所以单独存一份引用
+var _demolish_button: Button = null
+
 
 func _ready() -> void:
 	# 盖在调试面板上面一点，避免被建筑挡住
@@ -75,6 +78,19 @@ func _build() -> void:
 	_body.add_theme_constant_override("separation", 6)
 	scroll.add_child(_body)
 
+	# 底部固定区：放在 scroll 后面（同级兄弟）
+	vbox.add_child(HSeparator.new())
+
+	_demolish_button = Button.new()
+	_demolish_button.text = "摧毁建筑"
+	_demolish_button.focus_mode = Control.FOCUS_NONE
+	# 横向铺满，和面板其它控件对齐
+	_demolish_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# 用红色文字提示「这是个破坏性操作」，不额外换整套按钮样式，保持和项目风格一致
+	_demolish_button.add_theme_color_override("font_color", Color(1.0, 0.45, 0.45))
+	_demolish_button.pressed.connect(_on_demolish_pressed)
+	vbox.add_child(_demolish_button)
+
 
 ## 让某一栋建筑的点击都连到这里
 func _connect_building(building: Building) -> void:
@@ -104,6 +120,19 @@ func hide_panel() -> void:
 ## 面板开着没有
 func is_open() -> bool:
 	return _panel != null and _panel.visible
+
+
+## 点「摧毁」：先收起面板，再拆建筑。[br]
+## 顺序不能反：[member _current] 持有建筑引用，建筑被 free 后它就失效，[br]
+## 先 hide_panel() 把它置空，后续刷新就不会碰到已释放的对象。
+func _on_demolish_pressed() -> void:
+	if _current == null or not is_instance_valid(_current):
+		hide_panel()
+		return
+
+	var building := _current
+	hide_panel()
+	building.remove()
 
 
 ## 点空地收起：点建筑的那一下会被建筑自己的按钮吃掉，走不到这里
