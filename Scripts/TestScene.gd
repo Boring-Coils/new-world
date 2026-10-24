@@ -155,8 +155,24 @@ func _setup_ui() -> void:
 
 ## 调试用：自动放一个取水站、一个居民，再故意重叠放一次，验证「能放 / 不能放」两条路
 func _auto_test_placement() -> void:
+	var world := WorldGridGlobal.world
 	var buildings_before := TickManager.buildings.size()
 	var humans_before := TickManager.humans.size()
+
+	# 失败建筑即使已进入场景树，也不应注册到 TickManager
+	var failed_building := WaterStation.new()
+	add_child(failed_building)
+	var buildings_before_failed_place := TickManager.buildings.size()
+	var failed_place_ok := failed_building.place_at(world, Vector2i(-100, -100))
+	var failed_place_registered := TickManager.buildings.has(failed_building)
+	var failed_place_count_ok := TickManager.buildings.size() == buildings_before_failed_place
+	print("[AUTOPLACE] 非法放置(应 false)=%s 已注册(应 false)=%s 建筑未增加=%s is_placed=%s" % [
+		failed_place_ok,
+		failed_place_registered,
+		failed_place_count_ok,
+		failed_building.is_placed,
+	])
+	failed_building.free()
 
 	_placer.select_kind(PlacementController.Kind.WATER)
 	var water_ok := _placer.place_at_cell(Vector2i(500, 520))
@@ -173,7 +189,6 @@ func _auto_test_placement() -> void:
 	var blocked_ok := _placer.place_at_cell(Vector2i(500, 522))
 
 	# 本体压住已有水站出入口（但不压住水站本体），也应当失败
-	var world := WorldGridGlobal.world
 	var old_entrance := Vector2i(499, 522)
 	var entrance_was_walkable := world.is_walkable(old_entrance)
 	var buildings_before_entrance_test := TickManager.buildings.size()

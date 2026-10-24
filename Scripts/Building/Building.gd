@@ -37,6 +37,9 @@ var display_name: String = "建筑"
 ## 是否是「放置预览」（半透明、不注册到 TickManager、不占格子）
 var is_preview: bool = false
 
+## 是否已完成放置并占用世界网格（只有成功放置的建筑才注册到 TickManager）
+var is_placed: bool = false
+
 ## 预览状态下当前格子能不能放，决定描边是绿还是红
 var preview_valid: bool = true
 
@@ -70,12 +73,18 @@ var _detail_sections: Array[Dictionary] = []
 
 func _ready() -> void:
 	_build_visuals()
-	if not is_preview:
-		TickManager.register_building(self)
+	_register_if_placed()
 
 
 func _exit_tree() -> void:
 	TickManager.unregister_building(self)
+
+
+## 成功放置且已进入场景树后才登记。失败建筑和预览都不会走到这里。
+func _register_if_placed() -> void:
+	if not is_placed or is_preview or not is_inside_tree():
+		return
+	TickManager.register_building(self)
 
 
 ## 每刻由 [TickManager] 调用。基类什么都不做，子类按需要覆盖。
@@ -201,7 +210,8 @@ func can_place_at(world: WorldGrid, origin: Vector2i) -> bool:
 
 
 ## 把建筑放到 [param origin] 这一格上。成功返回 [code]true[/code]。[br]
-## 放好之后，建筑本体占的格子会被设成不可走，出入口保持可走。
+## 放好之后，建筑本体占的格子会被设成不可走，出入口保持可走。[br]
+## 只有放置成功后才登记到 [TickManager]。
 func place_at(world: WorldGrid, origin: Vector2i) -> bool:
 	if not can_place_at(world, origin):
 		push_warning("Building.place_at: %s 无法放在 %s" % [name, origin])
@@ -214,6 +224,8 @@ func place_at(world: WorldGrid, origin: Vector2i) -> bool:
 	for cell in get_occupied_cells():
 		world.set_walkable(cell, false)
 
+	is_placed = true
+	_register_if_placed()
 	queue_redraw()
 	return true
 

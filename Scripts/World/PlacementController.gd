@@ -144,19 +144,20 @@ func place_at_cell(mouse_cell: Vector2i) -> bool:
 		return false
 
 	var building := _create_building(kind)
+	if not building.place_at(world, origin):
+		building.free()
+		notice.emit("放置失败")
+		return false
+
+	# 放置成功后再进入场景树，失败建筑不会短暂出现在 TickManager 中
 	building.name = building.display_name
 	add_child(building)
 	# 还停在这个模式里的话，新建筑同样不能被点开
 	building.set_click_enabled(kind == Kind.NONE)
-	if building.place_at(world, origin):
-		# 建筑压在原本站着人的格子上时，让人自己走出来
-		_evict_humans_in(building)
-		notice.emit("%s 已放下（左上角 %s）" % [building.name, origin])
-		return true
-
-	building.queue_free()
-	notice.emit("放置失败")
-	return false
+	# 建筑压在原本站着人的格子上时，让人自己走出来
+	_evict_humans_in(building)
+	notice.emit("%s 已放下（左上角 %s）" % [building.name, origin])
+	return true
 
 
 ## 把站在新建筑占地范围内的人挤出去（他们自己走到最近的空地）
