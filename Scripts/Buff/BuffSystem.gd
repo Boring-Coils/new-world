@@ -6,7 +6,7 @@ class_name BuffSystem
 ## 效果一律问各个 buff，本类只做三件事：[br]
 ## - 添加：没有就实例化，有就交给那个 buff 自己决定怎么叠（[method BuffBase.reapply]）[br]
 ## - 倒计时：每刻扣 [member BuffBase.duration]，扣到 0 自动移除[br]
-## - 汇总：闸门取「与」、倍率相乘，供 [Human] 直接读[br]
+## - 汇总：闸门取「与」、倍率相乘，供 [Human] / [HumanAI] 直接读[br]
 ## 本类[b]不打印、不碰 UI[/b]：添加和到期只发 signal，谁想看谁连。
 
 ## 新 buff 生效（不管是新建还是复用）时发出

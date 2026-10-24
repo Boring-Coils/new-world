@@ -168,7 +168,7 @@ func _evict_humans_in(building: Building) -> void:
 		if not is_instance_valid(human):
 			continue
 		if cells.has(WorldGridGlobal.world.world_to_cell(human.position)):
-			human.evict_out()
+			human.ai.evict_out()
 			moved += 1
 	if moved > 0:
 		print("[PLACE] 有 %d 个居民被 %s 压住，正在自己走出来" % [moved, building.name])

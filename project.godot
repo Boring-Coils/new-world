@@ -13,7 +13,7 @@ config_version=5
 config/name="new_world"
 config/version="0.0.1a"
 run/main_scene="res://Scenes/Colony.tscn"
-config/features=PackedStringArray("4.7", "Forward Plus")
+config/features=PackedStringArray("4.7", "C#", "Forward Plus")
 config/icon="uid://ofm4rbgt6kj8"
 
 [autoload]
@@ -29,6 +29,10 @@ window/stretch/aspect="expand"
 [dotnet]
 
 project/assembly_name="new_world"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/missbehave/plugin.cfg")
 
 [physics]
 

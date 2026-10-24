@@ -221,7 +221,7 @@ func _auto_test_placement() -> void:
 	var human_cell := WorldGridGlobal.world.world_to_cell(before_pos)
 	_placer.select_kind(PlacementController.Kind.WATER)
 	var on_human_ok := _placer.place_at_cell(human_cell)
-	var moved_ok: bool = victim._is_relocating or victim.position != before_pos
+	var moved_ok: bool = victim.ai.is_relocating() or victim.position != before_pos
 	print("[AUTOPLACE] 压着居民放建筑=%s（应 true） 居民被挤出来=%s（应 true）" % [on_human_ok, moved_ok])
 
 	print("[AUTOPLACE] 建筑 %d -> %d，居民 %d -> %d" % [
@@ -254,14 +254,14 @@ func _process(_delta: float) -> void:
 	for h in TickManager.humans:
 		if not is_instance_valid(h):
 			continue
-		if h.phase == Human.Phase.INSIDE_WORK:
+		if h.ai.phase == HumanAI.Phase.INSIDE_WORK:
 			# 已经进门了，模型是隐藏的，单独列出来
 			inside_work += 1
-		elif h.goal == Human.Goal.WATER:
+		elif h.ai.goal == HumanAI.Goal.WATER:
 			at_water += 1
-		elif h.goal == Human.Goal.FOOD:
+		elif h.ai.goal == HumanAI.Goal.FOOD:
 			at_food += 1
-		elif h.goal == Human.Goal.WORK:
+		elif h.ai.goal == HumanAI.Goal.WORK:
 			going_work += 1
 		else:
 			idle += 1
@@ -293,10 +293,10 @@ func _process(_delta: float) -> void:
 				h.name,
 				h.water,
 				h.food,
-				Human.Goal.keys()[h.goal],
-				Human.Phase.keys()[h.phase],
+				HumanAI.Goal.keys()[h.ai.goal],
+				HumanAI.Phase.keys()[h.ai.phase],
 				WorldGridGlobal.world.world_to_cell(h.position),
-				h.path.size(),
+				h.ai.path.size(),
 			]
 		print(line)
 
