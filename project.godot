@@ -11,9 +11,9 @@ config_version=5
 [application]
 
 config/name="New World"
-config/version="0.0.1b"
+config/version="0.0.1.2"
 run/main_scene="res://Scenes/Colony.tscn"
-config/features=PackedStringArray("4.7", "C#", "Forward Plus")
+config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="uid://ofm4rbgt6kj8"
 
 [autoload]
@@ -28,7 +28,7 @@ window/stretch/aspect="expand"
 
 [dotnet]
 
-project/assembly_name="new_world"
+project/assembly_name="New World"
 
 [editor_plugins]
 
