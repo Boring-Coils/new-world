@@ -37,6 +37,9 @@ var ai: HumanAI
 ## 外观节点，子节点，见 [HumanVisual]
 @onready var visual: HumanVisual = $Visual
 
+## 在哪个建筑里(逻辑还没实现，但需要这个变量)
+var in_building: Building = null
+
 
 ## 创建一个居民节点。[br]
 ## 居民身上的子节点（比如 [BuffSystem]）都写在 Human.tscn 里，所以别直接 [code]Human.new()[/code]。

@@ -1,4 +1,4 @@
-extends RefCounted
+extends Node
 class_name HumanAI
 
 ## 居民 AI。[br]

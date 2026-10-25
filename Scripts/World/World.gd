@@ -8,6 +8,7 @@ class_name World
 
 ## 相机对着哪里、缩放多少，见 [CameraRig]
 
+var WAIT_PLACE = Vector2(480, 500)
 
 func _ready() -> void:
 	_setup_camera()
@@ -37,7 +38,7 @@ func _setup_grid() -> void:
 	add_child(grid)
 
 
-## 全局调试快捷键：空格暂停/继续，数字 1~4 切倍速。[br]
+## 全局快捷键：空格暂停/继续，数字 1~4 切倍速。[br]
 ## 放在 World 而不是某个具体场景里，这样 Colony 和 TestScene 都自带这套操作。
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_accept"):

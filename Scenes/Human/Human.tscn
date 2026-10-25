@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://gby7aaicdm6c" path="res://Scripts/Human/Human.gd" id="1_1mkh7"]
 [ext_resource type="Script" uid="uid://dbmfgn70fnvrg" path="res://Scripts/Buff/BuffSystem.gd" id="2_bufsys"]
 [ext_resource type="Script" uid="uid://cilipc470l7a5" path="res://Scripts/Human/HumanVisual.gd" id="3_visual"]
+[ext_resource type="Script" uid="uid://bryvaknlc6cr4" path="res://Scripts/Human/HumanAI/HumanAI.gd" id="4_pjhry"]
 
 [node name="HumanRoot" type="Node2D" unique_id=2135791647]
 script = ExtResource("1_1mkh7")
@@ -12,3 +13,7 @@ script = ExtResource("2_bufsys")
 
 [node name="Visual" type="Node2D" parent="." unique_id=1538600763]
 script = ExtResource("3_visual")
+
+[node name="HumanAI" type="Node" parent="." unique_id=1603390600]
+script = ExtResource("4_pjhry")
+metadata/_custom_type_script = "uid://bryvaknlc6cr4"
