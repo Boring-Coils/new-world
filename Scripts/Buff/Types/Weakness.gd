@@ -1,10 +1,11 @@
 extends BuffBase
 class_name Weakness
 
-var heal_time: int = 1800 * 5
+var heal_time: int = TickManager.TICKS_PER_DAY * 5
 
 func apply(_params: Dictionary) -> void:
-	duration = 18000
+	duration = TickManager.TICKS_PER_DAY * 10
+
 
 ## 多次应用没用
 func reapply(params: Dictionary) -> void:
@@ -17,7 +18,7 @@ func on_tick() -> void:
 		duration = 0
 
 func on_remove() -> void:
-	if heal_time >= 0:
+	if heal_time > 0:
 		human.die()
 
 func can_work() -> bool:

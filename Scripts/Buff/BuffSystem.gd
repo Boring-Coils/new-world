@@ -110,10 +110,10 @@ func on_tick() -> void:
 		if not is_instance_valid(buff):
 			continue
 		buff.on_tick()
-		if buff.duration > 0:
-			buff.duration -= 1
-			if buff.duration <= 0:
-				remove_buff(buff.buff_type)
+
+		buff.duration -= 1
+		if buff.duration <= 0:
+			remove_buff(buff.buff_type)
 
 
 ## 汇总：只要有一个 buff 说不能工作，就是不能工作
