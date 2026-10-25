@@ -1,14 +1,14 @@
 [gd_scene format=3 uid="uid://ddist5l6hbkjy"]
 
 [ext_resource type="Script" uid="uid://gby7aaicdm6c" path="res://Scripts/Human/Human.gd" id="1_1mkh7"]
-[ext_resource type="Script" path="res://Scripts/Buff/BuffSystem.gd" id="2_bufsys"]
-[ext_resource type="Script" path="res://Scripts/Human/HumanVisual.gd" id="3_visual"]
+[ext_resource type="Script" uid="uid://dbmfgn70fnvrg" path="res://Scripts/Buff/BuffSystem.gd" id="2_bufsys"]
+[ext_resource type="Script" uid="uid://cilipc470l7a5" path="res://Scripts/Human/HumanVisual.gd" id="3_visual"]
 
 [node name="HumanRoot" type="Node2D" unique_id=2135791647]
 script = ExtResource("1_1mkh7")
 
-[node name="BuffSystem" type="Node" parent="."]
+[node name="BuffSystem" type="Node" parent="." unique_id=1243188914]
 script = ExtResource("2_bufsys")
 
-[node name="Visual" type="Node2D" parent="."]
+[node name="Visual" type="Node2D" parent="." unique_id=1538600763]
 script = ExtResource("3_visual")
