@@ -4,6 +4,10 @@
 [ext_resource type="Script" uid="uid://dbmfgn70fnvrg" path="res://Scripts/Buff/BuffSystem.gd" id="2_bufsys"]
 [ext_resource type="Script" uid="uid://cilipc470l7a5" path="res://Scripts/Human/HumanVisual.gd" id="3_visual"]
 [ext_resource type="Script" uid="uid://bryvaknlc6cr4" path="res://Scripts/Human/HumanAI/HumanAI.gd" id="4_pjhry"]
+[ext_resource type="Script" uid="uid://couw105c3bde4" path="res://addons/godot_state_charts/state_chart.gd" id="5_ipm3p"]
+[ext_resource type="Script" uid="uid://jk2jm1g6q853" path="res://addons/godot_state_charts/compound_state.gd" id="6_2ibpv"]
+[ext_resource type="Script" uid="uid://cytafq8i1y8qm" path="res://addons/godot_state_charts/atomic_state.gd" id="7_fjfvk"]
+[ext_resource type="Script" uid="uid://cf1nsco3w0mf6" path="res://addons/godot_state_charts/transition.gd" id="8_uhg6n"]
 
 [node name="HumanRoot" type="Node2D" unique_id=2135791647]
 script = ExtResource("1_1mkh7")
@@ -17,3 +21,59 @@ script = ExtResource("3_visual")
 [node name="HumanAI" type="Node" parent="." unique_id=1603390600]
 script = ExtResource("4_pjhry")
 metadata/_custom_type_script = "uid://bryvaknlc6cr4"
+
+[node name="StateChart" type="Node" parent="." unique_id=1746601749]
+script = ExtResource("5_ipm3p")
+track_in_editor = true
+metadata/_custom_type_script = "uid://couw105c3bde4"
+
+[node name="CompoundState" type="Node" parent="StateChart" unique_id=1506175379]
+script = ExtResource("6_2ibpv")
+initial_state = NodePath("Idle")
+metadata/_custom_type_script = "uid://jk2jm1g6q853"
+
+[node name="Idle" type="Node" parent="StateChart/CompoundState" unique_id=1671552279]
+script = ExtResource("7_fjfvk")
+metadata/_custom_type_script = "uid://cytafq8i1y8qm"
+
+[node name="To_GoWork" type="Node" parent="StateChart/CompoundState/Idle" unique_id=322880290]
+script = ExtResource("8_uhg6n")
+to = NodePath("../../GoWork")
+delay_in_seconds = "0.0"
+metadata/_custom_type_script = "uid://cf1nsco3w0mf6"
+
+[node name="To_GoEat" type="Node" parent="StateChart/CompoundState/Idle" unique_id=2112477450]
+script = ExtResource("8_uhg6n")
+to = NodePath("../../GoEat")
+delay_in_seconds = "0.0"
+metadata/_custom_type_script = "uid://cf1nsco3w0mf6"
+
+[node name="To_GoDrink" type="Node" parent="StateChart/CompoundState/Idle" unique_id=934720060]
+script = ExtResource("8_uhg6n")
+to = NodePath("../../GoDrink")
+delay_in_seconds = "0.0"
+metadata/_custom_type_script = "uid://cf1nsco3w0mf6"
+
+[node name="GoWork" type="Node" parent="StateChart/CompoundState" unique_id=1893010562]
+script = ExtResource("7_fjfvk")
+metadata/_custom_type_script = "uid://cytafq8i1y8qm"
+
+[node name="Working" type="Node" parent="StateChart/CompoundState" unique_id=550957666]
+script = ExtResource("7_fjfvk")
+metadata/_custom_type_script = "uid://cytafq8i1y8qm"
+
+[node name="GoEat" type="Node" parent="StateChart/CompoundState" unique_id=1955940066]
+script = ExtResource("7_fjfvk")
+metadata/_custom_type_script = "uid://cytafq8i1y8qm"
+
+[node name="Eating" type="Node" parent="StateChart/CompoundState" unique_id=1217944133]
+script = ExtResource("7_fjfvk")
+metadata/_custom_type_script = "uid://cytafq8i1y8qm"
+
+[node name="GoDrink" type="Node" parent="StateChart/CompoundState" unique_id=605873226]
+script = ExtResource("7_fjfvk")
+metadata/_custom_type_script = "uid://cytafq8i1y8qm"
+
+[node name="Drinking" type="Node" parent="StateChart/CompoundState" unique_id=1693123073]
+script = ExtResource("7_fjfvk")
+metadata/_custom_type_script = "uid://cytafq8i1y8qm"
