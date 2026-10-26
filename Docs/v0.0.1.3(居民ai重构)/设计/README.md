@@ -5,7 +5,7 @@
 | 项目 | 内容 |
 | --- | --- |
 | 目标版本 | `0.0.1.3` 居民 AI 重构 |
-| 文档版本 | 设计初版 v1，已按当前工作区代码校对 |
+| 文档版本 | 设计修订版 v2，已按当前工作区代码与插件行为校对 |
 | 设计对象 | 单个居民的状态机、决策树、脚本职责、场景节点和迁移方式 |
 | 状态机实现 | 仓库内已有的 `godot_state_charts` 插件 |
 | 决策实现 | 项目自写 GDScript，不引入行为树或通用 AI 框架 |
@@ -17,7 +17,7 @@
 
 ## 2. 一句话方案
 
-`HumanAI` 是一个场景节点，负责收集每刻状态、运行决策树和维护目标；
+`HumanAI` 是一个场景节点，负责收集每刻状态、按需运行决策树和维护目标；
 它下面挂一棵使用 `godot_state_charts` 编辑的状态机，负责保证“一个居民同一时间
 只执行一个动作”；真正的寻路和移动全部交给兄弟节点 `HumanMotion`。
 
@@ -29,20 +29,26 @@ Human
 └─ HumanMotion：执行怎么走
 ```
 
-## 3. 最终采用的十项结论
+## 3. 最终采用的核心结论
 
 1. 每个居民只有一个 `HumanAI` 节点，场景中挂载，不再使用 `HumanAI.new(self)`。
 2. `HumanAI` 节点下挂唯一的 `StateChart`，状态机直接属于居民，不放进 Autoload。
 3. 状态机只表达动作生命周期，不把水、食物、工作三套流程完整复制三遍。
 4. 状态机的一级动作状态固定为 `Idle`、`Traveling`、`Waiting`、`Working`、
    `LeavingWork`、`Relocating`。
-5. 目的地通过 `Goal + target` 保存在 AI 上下文里，不通过事件参数传递。
-6. 决策树只在空闲、工作可中断检查和目标失效时运行，不每刻扫描全部建筑。
+5. `Goal + target` 保存在 `HumanAI` 协调器字段里，不通过事件参数传递；
+   `HumanAIContext` 只保存本刻评分输入。
+6. 决策树只在空闲和工作目标的中断检查时运行；目标失效只退出当前动作，
+   不借机扫描全部建筑。
 7. 状态等待使用每游戏刻清零的计数，不使用插件的 `delay_in_seconds` 帧计时。
 8. `StateChart.step()` 只由 `HumanAI.on_tick()` 每刻调用一次。
-9. `HumanMotion.on_tick()` 也只由 `HumanAI.on_tick()` 每刻调用一次。
-10. 动画、朝向、隐藏和显示由 `HumanMotion` 信号驱动 `HumanVisual`，
-    `HumanAI` 不直接操作表现节点。
+9. `HumanMotion.on_tick()` 也只由 `HumanAI.on_tick()` 调用；每刻至多一次，
+   且只在普通移动或脱困移动进行时调用。
+10. 动画和朝向由 `HumanMotion` 信号驱动 `HumanVisual`；工作站内显隐通过
+    `Human` 的语义接口完成，`HumanAI` 不直接操作表现节点。
+11. Buff 工作闸门覆盖 `WORK` 目标的 `Traveling`、`Waiting` 和 `Working`
+    三个阶段，不能只在已经进站后检查。
+12. 资源紧迫度使用包含消耗倍率和逐刻直接扣减的有效消耗速度，不能只读基础日耗。
 
 ## 4. 阅读顺序
 
@@ -97,6 +103,8 @@ Human
 
 `Human.on_tick()` 只调用一次 `HumanAI.on_tick()`；AI 再调用一次状态机推进和一次
 移动推进。状态脚本、居民脚本和视觉脚本都不允许自行建立模拟用 `_process`。
+`HumanStateBase` 覆盖插件基类的 `_ready()` 时必须先调用 `super._ready()`，否则插件
+初始化所需的 `_chart` 引用不会建立。
 
 ### 6.5 事件表达“发生了什么”，代码保存“要去哪里”
 
