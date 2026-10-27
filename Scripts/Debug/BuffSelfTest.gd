@@ -40,7 +40,10 @@ func _on_tick_advanced(total_ticks: int, _day: int, _tick_of_day: int) -> void:
 	# 眩晕期间不该出现「去上班」这个目标
 	if _applied:
 		var watched := _get_human(1)
-		if watched != null and watched.ai.goal == HumanAI.Goal.WORK:
+		if (
+			watched != null
+			and watched.ai.get_debug_snapshot()["goal"] == HumanAI.Goal.WORK
+		):
 			_stun_violation = true
 
 	if not _applied and total_ticks >= 10:
@@ -80,7 +83,7 @@ func _apply_buffs() -> void:
 		stunned.buff_system.can_work(), stunned.buff_system.get_speed_multiplier()
 	])
 	print("[BUFF] 口渴 每刻扣水=%.1f（期望 5.0）时长=%d（期望 40）" % [
-		_thirst_buff.drain, _thirst_buff.duration
+		_thirst_buff.get_water_drain_per_tick(), _thirst_buff.duration
 	])
 
 
@@ -99,9 +102,13 @@ func _check_final() -> void:
 	var tired := _get_human(0)
 	var stunned := _get_human(1)
 	var normal := _get_human(3)
-	var base_child := HumanAI.WALK_CELLS_PER_DAY * HumanAI.CHILD_SPEED_SCALE / float(TickManager.TICKS_PER_DAY)
-	var tired_speed := tired.ai.get_speed_cells_per_tick()
-	var normal_speed := normal.ai.get_speed_cells_per_tick()
+	var base_child := (
+		HumanMotion.WALK_CELLS_PER_DAY
+		* HumanMotion.CHILD_SPEED_SCALE
+		/ float(TickManager.TICKS_PER_DAY)
+	)
+	var tired_speed := tired.motion.get_speed_cells_per_tick()
+	var normal_speed := normal.motion.get_speed_cells_per_tick()
 
 	print("[BUFF] 疲劳仍在=%s 眩晕仍在=%s（都期望 true）" % [
 		tired.buff_system.has_buff(GlobalEnum.BuffType.FATIGUE),

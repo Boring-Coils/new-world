@@ -32,15 +32,3 @@ enum Outfit{
 	BLUE,## 蓝色（目前唯一）
 }
 
-## 居民状态
-enum HumanStatus{
-    IDLE,## 空闲
-    GO_WORK,## 前往工作的路上
-    WORKING,## 工作中
-    GO_EAT,## 前往取食站的路上
-    EATING,## 取食中
-    GO_WATER,## 前往取水站的路上
-    WATERING,## 取水中
-}
-
-

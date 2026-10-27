@@ -123,7 +123,7 @@ func _build_frames(dir: String, walk_frames: int) -> SpriteFrames:
 	return frames
 
 
-## 由 [HumanAI] 每刻调用：走路播 walk，站着播 idle
+## 由 [Human] 连接 [signal HumanMotion.moving_changed] 后调用。
 func set_moving(moving: bool) -> void:
 	if moving == _moving:
 		return
@@ -135,7 +135,7 @@ func set_moving(moving: bool) -> void:
 		_sprite.play(animation_name)
 
 
-## 由 [HumanAI] 在移动时调用：按位移方向选朝向。[br]
+## 由 [Human] 连接 [signal HumanMotion.facing_changed] 后调用。[br]
 ## 斜着走时取「偏得多的那个轴」，和大多数像素游戏的习惯一致。
 func set_facing(direction: Vector2) -> void:
 	if direction.length_squared() < 0.000001:

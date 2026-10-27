@@ -72,6 +72,16 @@ func get_consume_multiplier() -> float:
 	return 1.0
 
 
+## 每刻额外直接扣水量，默认 0.0；固定扣减不用乘到基础消耗倍率里。
+func get_water_drain_per_tick() -> float:
+	return 0.0
+
+
+## 每刻额外直接扣食物量，默认 0.0。
+func get_food_drain_per_tick() -> float:
+	return 0.0
+
+
 ## 某类目标的决策权重倍率（0.0 = 完全不想去）。默认 1.0，[BuffSystem] 把所有 buff 的结果相乘
 func get_weight_multiplier(_goal: int) -> float:
 	return 1.0

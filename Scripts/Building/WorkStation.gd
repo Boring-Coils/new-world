@@ -2,7 +2,7 @@ extends Building
 class_name WorkStation
 
 ## 工作站：居民只要有空就会来，在出入口停留 [constant WAIT_TICKS] 刻后进入建筑内部。[br]
-## 进去以后就站在建筑里的某个格子上（半透明显示，一眼能数出里面有几个人），[br]
+## 进去以后居民模型隐藏，站内人数由占用名单统计，[br]
 ## 水和食物照常消耗，直到某一项触发补给需求才从出入口出来。[br]
 ## 现在是测试用建筑，功能极简。
 
@@ -25,13 +25,13 @@ func get_wait_ticks() -> int:
 	return WAIT_TICKS
 
 
-## 居民进门：登记一下，模型在 [Human] 那边隐藏
+## 居民进门：登记占用；显隐由 [Human] 的语义接口执行。
 func enter(human: Human) -> void:
 	if not occupants.has(human):
 		occupants.append(human)
 
 
-## 居民出门：从名单里划掉
+## 居民出门：从名单里移除。
 func leave(human: Human) -> void:
 	occupants.erase(human)
 

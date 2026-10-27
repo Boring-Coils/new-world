@@ -1,79 +1,176 @@
 [gd_scene format=3 uid="uid://ddist5l6hbkjy"]
 
-[ext_resource type="Script" uid="uid://gby7aaicdm6c" path="res://Scripts/Human/Human.gd" id="1_1mkh7"]
-[ext_resource type="Script" uid="uid://dbmfgn70fnvrg" path="res://Scripts/Buff/BuffSystem.gd" id="2_bufsys"]
+[ext_resource type="Script" uid="uid://gby7aaicdm6c" path="res://Scripts/Human/Human.gd" id="1_human"]
+[ext_resource type="Script" uid="uid://dbmfgn70fnvrg" path="res://Scripts/Buff/BuffSystem.gd" id="2_buff"]
 [ext_resource type="Script" uid="uid://cilipc470l7a5" path="res://Scripts/Human/HumanVisual.gd" id="3_visual"]
-[ext_resource type="Script" uid="uid://bryvaknlc6cr4" path="res://Scripts/Human/HumanAI/HumanAI.gd" id="4_pjhry"]
-[ext_resource type="Script" uid="uid://couw105c3bde4" path="res://addons/godot_state_charts/state_chart.gd" id="5_ipm3p"]
-[ext_resource type="Script" uid="uid://jk2jm1g6q853" path="res://addons/godot_state_charts/compound_state.gd" id="6_2ibpv"]
-[ext_resource type="Script" uid="uid://cytafq8i1y8qm" path="res://addons/godot_state_charts/atomic_state.gd" id="7_fjfvk"]
-[ext_resource type="Script" uid="uid://cf1nsco3w0mf6" path="res://addons/godot_state_charts/transition.gd" id="8_uhg6n"]
+[ext_resource type="Script" uid="uid://dbmu8v1wgihe7" path="res://Scripts/Human/HumanMotion.gd" id="4_motion"]
+[ext_resource type="Script" uid="uid://bryvaknlc6cr4" path="res://Scripts/Human/HumanAI/HumanAI.gd" id="5_ai"]
+[ext_resource type="Script" uid="uid://couw105c3bde4" path="res://addons/godot_state_charts/state_chart.gd" id="6_chart"]
+[ext_resource type="Script" uid="uid://jk2jm1g6q853" path="res://addons/godot_state_charts/compound_state.gd" id="7_compound"]
+[ext_resource type="Script" uid="uid://cf1nsco3w0mf6" path="res://addons/godot_state_charts/transition.gd" id="8_transition"]
+[ext_resource type="Script" uid="uid://e1n5t8w2q7k4r" path="res://Scripts/Human/HumanAI/States/IdleState.gd" id="9_idle"]
+[ext_resource type="Script" uid="uid://f4s9j3z6m1v8p" path="res://Scripts/Human/HumanAI/States/TravelingState.gd" id="10_traveling"]
+[ext_resource type="Script" uid="uid://a8g2r7c5n9u3x" path="res://Scripts/Human/HumanAI/States/WaitingState.gd" id="11_waiting"]
+[ext_resource type="Script" uid="uid://h6v1q4b8t2m7s" path="res://Scripts/Human/HumanAI/States/WorkingState.gd" id="12_working"]
+[ext_resource type="Script" uid="uid://j9x3m5r1k6w2d" path="res://Scripts/Human/HumanAI/States/LeavingWorkState.gd" id="13_leaving"]
+[ext_resource type="Script" uid="uid://k2p8t4v7n1c9f" path="res://Scripts/Human/HumanAI/States/RelocatingState.gd" id="14_relocating"]
 
 [node name="HumanRoot" type="Node2D" unique_id=2135791647]
-script = ExtResource("1_1mkh7")
+script = ExtResource("1_human")
 
 [node name="BuffSystem" type="Node" parent="." unique_id=1243188914]
-script = ExtResource("2_bufsys")
+script = ExtResource("2_buff")
 
 [node name="Visual" type="Node2D" parent="." unique_id=1538600763]
 script = ExtResource("3_visual")
 
+[node name="Motion" type="Node" parent="." unique_id=2036482911]
+script = ExtResource("4_motion")
+
 [node name="HumanAI" type="Node" parent="." unique_id=1603390600]
-script = ExtResource("4_pjhry")
-metadata/_custom_type_script = "uid://bryvaknlc6cr4"
+script = ExtResource("5_ai")
 
-[node name="StateChart" type="Node" parent="." unique_id=1746601749]
-script = ExtResource("5_ipm3p")
+[node name="StateChart" type="Node" parent="HumanAI" unique_id=1746601749]
+script = ExtResource("6_chart")
 track_in_editor = true
-metadata/_custom_type_script = "uid://couw105c3bde4"
+warn_on_sending_unknown_events = true
 
-[node name="CompoundState" type="Node" parent="StateChart" unique_id=1506175379]
-script = ExtResource("6_2ibpv")
+[node name="Lifecycle" type="Node" parent="HumanAI/StateChart" unique_id=1506175379]
+script = ExtResource("7_compound")
+initial_state = NodePath("Normal")
+
+[node name="Normal" type="Node" parent="HumanAI/StateChart/Lifecycle" unique_id=1974135720]
+script = ExtResource("7_compound")
 initial_state = NodePath("Idle")
-metadata/_custom_type_script = "uid://jk2jm1g6q853"
 
-[node name="Idle" type="Node" parent="StateChart/CompoundState" unique_id=1671552279]
-script = ExtResource("7_fjfvk")
-metadata/_custom_type_script = "uid://cytafq8i1y8qm"
+[node name="Idle" type="Node" parent="HumanAI/StateChart/Lifecycle/Normal" unique_id=1671552279]
+script = ExtResource("9_idle")
 
-[node name="To_GoWork" type="Node" parent="StateChart/CompoundState/Idle" unique_id=322880290]
-script = ExtResource("8_uhg6n")
-to = NodePath("../../GoWork")
+[node name="ToTravelingOnGoalSelected" type="Node" parent="HumanAI/StateChart/Lifecycle/Normal/Idle" unique_id=322880290]
+script = ExtResource("8_transition")
+to = NodePath("../../Traveling")
+event = &"goal_selected"
 delay_in_seconds = "0.0"
-metadata/_custom_type_script = "uid://cf1nsco3w0mf6"
 
-[node name="To_GoEat" type="Node" parent="StateChart/CompoundState/Idle" unique_id=2112477450]
-script = ExtResource("8_uhg6n")
-to = NodePath("../../GoEat")
+[node name="Traveling" type="Node" parent="HumanAI/StateChart/Lifecycle/Normal" unique_id=1893010562]
+script = ExtResource("10_traveling")
+
+[node name="ToWaitingOnArrived" type="Node" parent="HumanAI/StateChart/Lifecycle/Normal/Traveling" unique_id=2112477450]
+script = ExtResource("8_transition")
+to = NodePath("../../Waiting")
+event = &"arrived"
 delay_in_seconds = "0.0"
-metadata/_custom_type_script = "uid://cf1nsco3w0mf6"
 
-[node name="To_GoDrink" type="Node" parent="StateChart/CompoundState/Idle" unique_id=934720060]
-script = ExtResource("8_uhg6n")
-to = NodePath("../../GoDrink")
+[node name="ToIdleOnPathFailed" type="Node" parent="HumanAI/StateChart/Lifecycle/Normal/Traveling" unique_id=934720060]
+script = ExtResource("8_transition")
+to = NodePath("../../Idle")
+event = &"path_failed"
 delay_in_seconds = "0.0"
-metadata/_custom_type_script = "uid://cf1nsco3w0mf6"
 
-[node name="GoWork" type="Node" parent="StateChart/CompoundState" unique_id=1893010562]
-script = ExtResource("7_fjfvk")
-metadata/_custom_type_script = "uid://cytafq8i1y8qm"
+[node name="ToIdleOnTargetInvalid" type="Node" parent="HumanAI/StateChart/Lifecycle/Normal/Traveling" unique_id=1955940066]
+script = ExtResource("8_transition")
+to = NodePath("../../Idle")
+event = &"target_invalid"
+delay_in_seconds = "0.0"
 
-[node name="Working" type="Node" parent="StateChart/CompoundState" unique_id=550957666]
-script = ExtResource("7_fjfvk")
-metadata/_custom_type_script = "uid://cytafq8i1y8qm"
+[node name="ToTravelingOnWorkInterrupted" type="Node" parent="HumanAI/StateChart/Lifecycle/Normal/Traveling" unique_id=1217944133]
+script = ExtResource("8_transition")
+to = NodePath("../../Traveling")
+event = &"work_interrupted"
+delay_in_seconds = "0.0"
 
-[node name="GoEat" type="Node" parent="StateChart/CompoundState" unique_id=1955940066]
-script = ExtResource("7_fjfvk")
-metadata/_custom_type_script = "uid://cytafq8i1y8qm"
+[node name="ToIdleOnWorkCancelled" type="Node" parent="HumanAI/StateChart/Lifecycle/Normal/Traveling" unique_id=605873226]
+script = ExtResource("8_transition")
+to = NodePath("../../Idle")
+event = &"work_cancelled"
+delay_in_seconds = "0.0"
 
-[node name="Eating" type="Node" parent="StateChart/CompoundState" unique_id=1217944133]
-script = ExtResource("7_fjfvk")
-metadata/_custom_type_script = "uid://cytafq8i1y8qm"
+[node name="Waiting" type="Node" parent="HumanAI/StateChart/Lifecycle/Normal" unique_id=1379652342]
+script = ExtResource("11_waiting")
 
-[node name="GoDrink" type="Node" parent="StateChart/CompoundState" unique_id=605873226]
-script = ExtResource("7_fjfvk")
-metadata/_custom_type_script = "uid://cytafq8i1y8qm"
+[node name="ToIdleOnServiceCompleted" type="Node" parent="HumanAI/StateChart/Lifecycle/Normal/Waiting" unique_id=1693123073]
+script = ExtResource("8_transition")
+to = NodePath("../../Idle")
+event = &"service_completed"
+delay_in_seconds = "0.0"
 
-[node name="Drinking" type="Node" parent="StateChart/CompoundState" unique_id=1693123073]
-script = ExtResource("7_fjfvk")
-metadata/_custom_type_script = "uid://cytafq8i1y8qm"
+[node name="ToWorkingOnWorkStarted" type="Node" parent="HumanAI/StateChart/Lifecycle/Normal/Waiting" unique_id=1638952417]
+script = ExtResource("8_transition")
+to = NodePath("../../Working")
+event = &"work_started"
+delay_in_seconds = "0.0"
+
+[node name="ToIdleOnTargetInvalid" type="Node" parent="HumanAI/StateChart/Lifecycle/Normal/Waiting" unique_id=1541023388]
+script = ExtResource("8_transition")
+to = NodePath("../../Idle")
+event = &"target_invalid"
+delay_in_seconds = "0.0"
+
+[node name="ToTravelingOnWorkInterrupted" type="Node" parent="HumanAI/StateChart/Lifecycle/Normal/Waiting" unique_id=1148720956]
+script = ExtResource("8_transition")
+to = NodePath("../../Traveling")
+event = &"work_interrupted"
+delay_in_seconds = "0.0"
+
+[node name="ToIdleOnWorkCancelled" type="Node" parent="HumanAI/StateChart/Lifecycle/Normal/Waiting" unique_id=1316258044]
+script = ExtResource("8_transition")
+to = NodePath("../../Idle")
+event = &"work_cancelled"
+delay_in_seconds = "0.0"
+
+[node name="Working" type="Node" parent="HumanAI/StateChart/Lifecycle/Normal" unique_id=550957666]
+script = ExtResource("12_working")
+
+[node name="ToLeavingWorkOnWorkInterrupted" type="Node" parent="HumanAI/StateChart/Lifecycle/Normal/Working" unique_id=1447920031]
+script = ExtResource("8_transition")
+to = NodePath("../../LeavingWork")
+event = &"work_interrupted"
+delay_in_seconds = "0.0"
+
+[node name="ToIdleOnWorkCancelled" type="Node" parent="HumanAI/StateChart/Lifecycle/Normal/Working" unique_id=193207445]
+script = ExtResource("8_transition")
+to = NodePath("../../Idle")
+event = &"work_cancelled"
+delay_in_seconds = "0.0"
+
+[node name="LeavingWork" type="Node" parent="HumanAI/StateChart/Lifecycle/Normal" unique_id=1106874329]
+script = ExtResource("13_leaving")
+
+[node name="ToTravelingOnExitRouteStarted" type="Node" parent="HumanAI/StateChart/Lifecycle/Normal/LeavingWork" unique_id=1742457316]
+script = ExtResource("8_transition")
+to = NodePath("../../Traveling")
+event = &"exit_route_started"
+delay_in_seconds = "0.0"
+
+[node name="ToIdleOnPathFailed" type="Node" parent="HumanAI/StateChart/Lifecycle/Normal/LeavingWork" unique_id=1986513728]
+script = ExtResource("8_transition")
+to = NodePath("../../Idle")
+event = &"path_failed"
+delay_in_seconds = "0.0"
+
+[node name="ToIdleOnTargetInvalid" type="Node" parent="HumanAI/StateChart/Lifecycle/Normal/LeavingWork" unique_id=1057883027]
+script = ExtResource("8_transition")
+to = NodePath("../../Idle")
+event = &"target_invalid"
+delay_in_seconds = "0.0"
+
+[node name="ToRelocatingOnRelocationRequested" type="Node" parent="HumanAI/StateChart/Lifecycle/Normal" unique_id=2035187754]
+script = ExtResource("8_transition")
+to = NodePath("../../Relocating")
+event = &"relocation_requested"
+delay_in_seconds = "0.0"
+
+[node name="Relocating" type="Node" parent="HumanAI/StateChart/Lifecycle" unique_id=1284067155]
+script = ExtResource("14_relocating")
+
+[node name="ToNormalOnRelocationFinished" type="Node" parent="HumanAI/StateChart/Lifecycle/Relocating" unique_id=1924321608]
+script = ExtResource("8_transition")
+to = NodePath("../../Normal")
+event = &"relocation_finished"
+delay_in_seconds = "0.0"
+
+[node name="ToNormalOnRelocationFailed" type="Node" parent="HumanAI/StateChart/Lifecycle/Relocating" unique_id=1229854117]
+script = ExtResource("8_transition")
+to = NodePath("../../Normal")
+event = &"relocation_failed"
+delay_in_seconds = "0.0"

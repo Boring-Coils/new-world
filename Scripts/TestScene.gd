@@ -221,7 +221,11 @@ func _auto_test_placement() -> void:
 	var human_cell := WorldGridGlobal.world.world_to_cell(before_pos)
 	_placer.select_kind(PlacementController.Kind.WATER)
 	var on_human_ok := _placer.place_at_cell(human_cell)
-	var moved_ok: bool = victim.ai.is_relocating() or victim.position != before_pos
+	var victim_snapshot := victim.ai.get_debug_snapshot()
+	var moved_ok: bool = (
+		bool(victim_snapshot["relocating"])
+		or victim.position != before_pos
+	)
 	print("[AUTOPLACE] 压着居民放建筑=%s（应 true） 居民被挤出来=%s（应 true）" % [on_human_ok, moved_ok])
 
 	print("[AUTOPLACE] 建筑 %d -> %d，居民 %d -> %d" % [
@@ -249,25 +253,33 @@ func _process(_delta: float) -> void:
 	var at_food := 0
 	var going_work := 0
 	var inside_work := 0
+	var relocating := 0
 	var idle := 0
 
 	for h in TickManager.humans:
 		if not is_instance_valid(h):
 			continue
-		if h.ai.phase == HumanAI.Phase.INSIDE_WORK:
-			# 已经进门了，模型是隐藏的，单独列出来
-			inside_work += 1
-		elif h.ai.goal == HumanAI.Goal.WATER:
-			at_water += 1
-		elif h.ai.goal == HumanAI.Goal.FOOD:
-			at_food += 1
-		elif h.ai.goal == HumanAI.Goal.WORK:
-			going_work += 1
-		else:
-			idle += 1
+		var snapshot := h.ai.get_debug_snapshot()
+		match snapshot["state"]:
+			&"working":
+				inside_work += 1
+			&"relocating":
+				relocating += 1
+			&"idle":
+				idle += 1
+			_:
+				match int(snapshot["goal"]):
+					HumanAI.Goal.WATER:
+						at_water += 1
+					HumanAI.Goal.FOOD:
+						at_food += 1
+					HumanAI.Goal.WORK:
+						going_work += 1
+					_:
+						idle += 1
 
-	_debug_ui.set_stats("第 %d 天 第 %d 刻\n取水 %d   取食 %d\n上班路上 %d   站内 %d\n空闲 %d" % [
-		day, tick, at_water, at_food, going_work, inside_work, idle
+	_debug_ui.set_stats("第 %d 天 第 %d 刻\n取水 %d   取食 %d\n上班路上 %d   站内 %d\n脱困 %d   空闲 %d" % [
+		day, tick, at_water, at_food, going_work, inside_work, relocating, idle
 	])
 
 	# 调试模式：定期打印一份，跑满 _max_ticks 刻就退出
@@ -283,20 +295,27 @@ func _process(_delta: float) -> void:
 		return
 	if TickManager.total_ticks - _last_report_tick >= 100:
 		_last_report_tick = TickManager.total_ticks
-		var line := "[SIM] tick=%d 取水%d 取食%d 上班%d 站内%d 空闲%d |" % [
-			TickManager.total_ticks, at_water, at_food, going_work, inside_work, idle
+		var line := "[SIM] tick=%d 取水%d 取食%d 上班%d 站内%d 脱困%d 空闲%d |" % [
+			TickManager.total_ticks,
+			at_water,
+			at_food,
+			going_work,
+			inside_work,
+			relocating,
+			idle,
 		]
 		for h in TickManager.humans:
 			if not is_instance_valid(h):
 				continue
+			var snapshot := h.ai.get_debug_snapshot()
 			line += " %s(水%.0f,食%.0f,%s/%s,格%s,路%d)" % [
 				h.name,
 				h.water,
 				h.food,
-				HumanAI.Goal.keys()[h.ai.goal],
-				HumanAI.Phase.keys()[h.ai.phase],
+				snapshot["goal_name"],
+				snapshot["state"],
 				WorldGridGlobal.world.world_to_cell(h.position),
-				h.ai.path.size(),
+				snapshot["path_size"],
 			]
 		print(line)
 

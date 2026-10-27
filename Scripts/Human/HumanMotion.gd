@@ -4,7 +4,7 @@ class_name HumanMotion
 ## 居民的移动组件。[br]
 ## 负责路径缓存、逐刻连续移动、选择建筑出入口，以及被建筑压住后的脱困移动。[br]
 ## 本组件不决定目标，也不直接写 AI 状态；由 [HumanAI] 决定去哪里，再由本组件执行。[br]
-## 它不会自行创建 [code]_process[/code] 循环，必须由居民或 AI 每刻调用 [method on_tick]。
+## 它不会自行创建 [code]_process[/code] 循环，只由 [HumanAI] 每刻调用一次 [method on_tick]。
 
 ## 开始沿一条新路径移动
 signal movement_started(destination: Vector2i)
@@ -21,7 +21,7 @@ signal moving_changed(moving: bool)
 ## 本刻的移动方向发生变化，供外观组件选择朝向
 signal facing_changed(direction: Vector2)
 
-## 脱困移动结束（无论沿路径走完还是直接落到最近空地）
+## 脱困成功结束（沿路径走完、直接落到安全格或确认无需移动）
 signal relocation_finished
 
 ## 居民完成离站状态切换
@@ -94,7 +94,7 @@ func get_path_size() -> int:
 ## 返回是否成功开始移动。
 func move_to_building(building: Building) -> bool:
 	if not _can_move() or not is_instance_valid(building):
-		return false
+		return _fail_move()
 
 	var route := _find_route_to_building(building)
 	return _start_route(route, false)
@@ -103,7 +103,7 @@ func move_to_building(building: Building) -> bool:
 ## 移动到某一格。参数是世界格子坐标，不是像素坐标。
 func move_to_cell(cell: Vector2i) -> bool:
 	if not _can_move():
-		return false
+		return _fail_move(cell)
 
 	var route := _find_route_to_cell(cell)
 	return _start_route(route, false)
@@ -128,7 +128,7 @@ func find_nearest_entrance(building_type: GlobalEnum.BuildingType) -> Vector2i:
 ## 移动到某一类建筑中按实际寻路距离最近的建筑。
 func move_to_nearest_building(building_type: GlobalEnum.BuildingType) -> bool:
 	if not _can_move():
-		return false
+		return _fail_move()
 
 	var route := _find_nearest_route_to_type(building_type)
 	return _start_route(route, false)
@@ -148,7 +148,7 @@ func get_ticks_to_building(building_type: GlobalEnum.BuildingType) -> int:
 	return ceili(float(route["distance"]) / speed_pixels)
 
 
-## 被新建筑压住时调用：走到最近的可走格。[br]
+## 被新建筑压住时调用：走到最近的可走格，并清理可能残留的建筑占用和隐藏状态。[br]
 ## 如果当前脚下已经是不可走格，会临时放行当前格来计算离开建筑的路径，随后恢复原状态。
 func relocate_to_nearest_walkable() -> bool:
 	if not _can_move():
@@ -157,9 +157,20 @@ func relocate_to_nearest_walkable() -> bool:
 	var world := WorldGridGlobal.world
 	var from_cell := world.world_to_cell(human.position)
 	var target_cell := world.find_nearest_walkable(from_cell)
+	if not is_instance_valid(human.in_building):
+		human.set_world_visibility(true)
 	if target_cell == from_cell:
-		# 已经站在空地时不需要移动；完全被围住时也没有可去的格子。
-		return world.is_walkable(target_cell)
+		if world.is_walkable(target_cell):
+			if is_instance_valid(human.in_building):
+				_commit_building_exit(from_cell)
+			_clear_path()
+			relocation_finished.emit()
+			return true
+		push_error("%s 脱困失败：当前格 %s 不可走，附近也没有安全格" % [
+			human.name,
+			from_cell,
+		])
+		return false
 
 	var was_walkable := world.is_walkable(from_cell)
 	if not was_walkable:
@@ -173,7 +184,6 @@ func relocate_to_nearest_walkable() -> bool:
 		if not _commit_building_exit(target_cell):
 			human.position = world.cell_to_world(target_cell)
 		_clear_path()
-		_is_relocating = false
 		arrived.emit(target_cell)
 		relocation_finished.emit()
 		return true
@@ -344,8 +354,7 @@ func _get_path_world_length(cell_path: Array[Vector2i]) -> float:
 ## 接受一条路线并开始移动。
 func _start_route(route: Dictionary, relocating: bool) -> bool:
 	if route.is_empty():
-		path_failed.emit(INVALID_CELL)
-		return false
+		return _fail_move()
 
 	var new_path: Array[Vector2i] = route["path"]
 	var exit_cell: Vector2i = route["exit_cell"]
@@ -375,7 +384,7 @@ func _commit_building_exit(exit_cell: Vector2i) -> bool:
 
 	human.position = WorldGridGlobal.world.cell_to_world(exit_cell)
 	human.in_building = null
-	human.show()
+	human.set_world_visibility(true)
 	building_exited.emit(building, exit_cell)
 	return true
 
@@ -411,3 +420,9 @@ func _set_moving(moving: bool) -> void:
 ## 公共移动接口的统一前置检查。
 func _can_move() -> bool:
 	return is_instance_valid(human)
+
+
+## 会创建移动状态的命令统一从这里报告一次失败。
+func _fail_move(destination: Vector2i = INVALID_CELL) -> bool:
+	path_failed.emit(destination)
+	return false

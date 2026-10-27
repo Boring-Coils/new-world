@@ -25,10 +25,10 @@ const SECONDS_PER_TICK: float = 1.0 / TICKS_PER_SECOND
 ## 一个游戏日有多少【游戏内】秒（现在是 6 小时）
 const GAME_SECONDS_PER_DAY: float = 6.0 * 3600.0
 
-## 一刻等于多少【游戏内】秒（一天 6 小时 ÷ 300 刻 = 72 秒）
+## 一刻等于多少【游戏内】秒（一天 6 小时 ÷ 1800 刻 = 12 秒）
 const GAME_SECONDS_PER_TICK: float = GAME_SECONDS_PER_DAY / float(TICKS_PER_DAY)
 
-## 每推进一刻发出一次；参数依次为：累计刻数、第几天（从 0 开始）、当天第几刻（0 ~ 299）
+## 每推进一刻发出一次；参数依次为：累计刻数、第几天（从 0 开始）、当天第几刻（0 ~ 1799）
 signal tick_advanced(total_ticks: int, day: int, tick_of_day: int)
 
 ## 有新建筑登记时发出（放下的建筑，不含预览虚影）[br]
@@ -99,7 +99,7 @@ func get_day() -> int:
 	return total_ticks / TICKS_PER_DAY
 
 
-## 当前是当天的第几刻（0 ~ 299）
+## 当前是当天的第几刻（0 ~ 1799）
 func get_tick_of_day() -> int:
 	return total_ticks % TICKS_PER_DAY
 

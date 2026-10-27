@@ -28,6 +28,10 @@ func apply(params: Dictionary) -> void:
 func on_tick() -> void:
 	if human == null:
 		return
-	var amount := drain * float(stacks)
+	var amount := get_water_drain_per_tick()
 	human.water -= amount
 	drained_total += amount
+
+
+func get_water_drain_per_tick() -> float:
+	return maxf(drain, 0.0) * float(stacks)

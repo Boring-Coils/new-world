@@ -3,10 +3,10 @@
 一个还在开发中的 2D 殖民地模拟原型，使用 Godot 4.7 和 GDScript。
 
 目前还没有完整的经营循环，现阶段主要把几件事跑通：居民会根据水和食物的余量决定下一步去哪，
-沿格子寻路，在建筑门口等几刻，再取水、取食或者进工作站。时间、消耗和移动都按同一个刻推进，
-不是各写各的 `_process`。
+通过动作状态机沿格子寻路，在建筑门口等几刻，再取水、取食或者进工作站。时间、消耗和移动都按
+同一个刻推进，不是各写各的 `_process`。
 
-主场景打开后是一块空地。可以从左上角的调试面板放建筑和居民，看看他们自己找路、排队和上班。
+主场景打开后是一块空地。可以从左上角的调试面板放建筑和居民，看看他们自己找路、等待和上班。
 `Scenes/TestScene.tscn` 是更完整的测试场景，开局会摆好水站、食物站、工作站和一批居民。
 
 ## 运行
@@ -32,7 +32,7 @@ godot --headless --path . Scenes/TestScene.tscn -- --speed=20 --max-ticks=600
 
 - 在空地上放取水站、取食站、工作站和居民，连续放也可以。
 - 建筑会检查占地、出入口和已有建筑；预览颜色会告诉你能不能放。
-- 居民按水、食物和工作的权重做决定，缺什么就去哪。
+- 居民按水、食物和工作的权重做决定，由状态机约束同一时间只执行一个主动作。
 - 工作站支持多个出入口，进站后居民会从画面上隐藏，统计面板里单独计数。
 - 有疲劳、眩晕、口渴和虚弱几种 Buff，会影响移动、消耗或能不能工作。
 - 点建筑可以看详情，左上角调试面板能看到当前时间、各状态人数和放置提示。
@@ -81,7 +81,9 @@ godot --headless --path . Scenes/TestScene.tscn -- --speed=20 --max-ticks=600
 常调的数值大致在这些地方：
 
 - 一天多少刻、现实时间快慢：`Scripts/Core/TickManager.gd`
-- 居民日耗和年龄段速度：`Scripts/Human/Human.gd`、`Scripts/Human/HumanAI/HumanAI.gd`
+- 居民日耗：`Scripts/Human/Human.gd`
+- 年龄段速度和移动：`Scripts/Human/HumanMotion.gd`
+- 目标权重和状态转换：`Scripts/Human/HumanAI/`
 - 建筑尺寸、入口和等待刻数：`Scripts/Building/`
 - 世界大小和格子像素：`Scripts/Grid/WorldGridGlobal.gd`、`Scripts/Grid/WorldGrid.gd`
 
@@ -105,8 +107,6 @@ godot --headless --path . Scenes/TestScene.tscn -- --bufftest --speed=20 --max-t
 
 ## 目前没做完
 
-- 居民 AI 正在重构。`HumanAI` 还保留旧的寻路和移动逻辑，`HumanMotion`、`Brain` 的拆分还没有完全接上。
-  当前无头运行会反复出现 `HumanAI._init` 参数不匹配的错误，场景实例和旧代码的构造方式还没统一。
 - “摧毁建筑”按钮已经放进详情页，但 `Building.remove()` 仍是占位实现，建筑拆除和网格恢复都还没做。
 - 工作站只是让居民进去待着，没有产出、班次或库存。
 - 没有存档、材料链、建造消耗和正式胜负条件。

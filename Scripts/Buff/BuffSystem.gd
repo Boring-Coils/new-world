@@ -142,6 +142,24 @@ func get_consume_multiplier() -> float:
 	return result
 
 
+## 汇总所有 Buff 每刻直接扣掉的水量。
+func get_water_drain_per_tick() -> float:
+	var result := 0.0
+	for buff in buffs:
+		if is_instance_valid(buff):
+			result += maxf(buff.get_water_drain_per_tick(), 0.0)
+	return result
+
+
+## 汇总所有 Buff 每刻直接扣掉的食物量。
+func get_food_drain_per_tick() -> float:
+	var result := 0.0
+	for buff in buffs:
+		if is_instance_valid(buff):
+			result += maxf(buff.get_food_drain_per_tick(), 0.0)
+	return result
+
+
 ## 汇总：所有 buff 对这类目标的权重倍率相乘
 func get_weight_multiplier(goal: int) -> float:
 	var result := 1.0

@@ -61,7 +61,7 @@ export_presets.cfg         Windows Desktop 导出预设
 Scenes/
   Colony.tscn              主场景
   TestScene.tscn           放置、模拟和 Buff 集成检查场景
-  Human/Human.tscn         居民场景，挂 BuffSystem、Visual 和 HumanAI
+  Human/Human.tscn         居民场景，挂 BuffSystem、Visual、Motion 和 HumanAI 状态图
 Scripts/
   Core/                    刻调度和全局时间规则
   World/                   世界骨架、殖民地、相机和放置控制
@@ -119,7 +119,7 @@ build/                     本地导出目录，不提交
 
 移动速度、日消耗和补给提前量都应按 `TICKS_PER_DAY` 和游戏内秒计算，而不是按帧率或现实时间。
 改 `TICKS_PER_DAY` 会影响多个系统；改 `TICKS_PER_SECOND` 只应影响现实中的播放速度。
-源码注释中仍可能残留旧的 `300` 刻或 `0~299` 说法，以常量和实际计算为准。
+修改时间逻辑时同时核对源码注释，避免重新引入旧的 `300` 刻或 `0~299` 说法。
 
 ### 4.4 坐标与寻路
 
@@ -162,24 +162,22 @@ build/                     本地导出目录，不提交
 `Human.on_tick()` 的当前顺序是：
 
 1. 推进 Buff。
-2. 检查工作闸门。
-3. 扣水和食物。
-4. 推进 AI。
+2. 扣水和食物。
+3. 推进 AI；工作闸门由 AI 在 `Traveling`、`Waiting`、`Working` 状态内检查。
 
-居民 AI 正在重构。`Docs/v0.0.1.3(居民ai重构)/HumanAI职责与接口.md` 描述目标边界：
+`Docs/v0.0.1.3(居民ai重构)/设计/README.md` 和 `HumanAI职责与接口.md` 描述当前边界：
 `HumanAI` 负责决策和行动状态，`HumanMotion` 负责寻路、移动和离站，`HumanVisual`
-负责表现，`BuffSystem` 负责状态效果。当前代码尚未完全迁移：`HumanAI` 仍保留旧的寻路和移动逻辑，
-`Human.gd` 还会动态创建 AI，而 `Human.tscn` 也挂有 `HumanAI` 节点。
+负责表现，`BuffSystem` 负责状态效果。`HumanAI` 下的 `StateChart` 是动作状态事实来源，
+`HumanMotion` 是唯一移动实现。
 
-因此修改 AI 前必须先判断任务是在“修当前实现”还是“完成重构”，不要在旧逻辑旁再加一套并行的
-寻路、移动或状态机。重构时尤其遵守以下约束：
+修改 AI、移动或建筑进出站逻辑时尤其遵守以下约束：
 
 - 同一刻只允许一个所有者推进居民移动。
-- 路径失败必须退出对应的移动状态，不能永久卡在 `MOVING`。
+- 路径失败必须退出对应的 `Traveling` / `LeavingWork` 状态，不能永久停留。
 - 从工作站内部出发时，先确认新路线可达，再原子地离站、清除 `in_building`、更新位置和恢复显示。
 - 被建筑挤出时暂停普通决策，脱困结束后重新决策。
-- Buff 禁止工作时，不能新选工作，也不能继续留在工作状态。
-- 当前测试和调试面板会读取 `goal`、`phase`、`path` 等字段；迁移接口时同步更新这些调用方。
+- Buff 禁止工作时，不能新选工作，也不能继续前往、等待或留在工作站。
+- 当前测试和调试面板通过 `get_debug_snapshot()` 和 `HumanMotion` 读取状态，不直接访问 AI 私有字段。
 
 ### 4.7 Buff
 
@@ -307,11 +305,8 @@ refactor: 将居民移动逻辑迁移到 HumanMotion
 - 主场景是 `Colony`，但自动化检查通常显式加载 `TestScene`；不要假设主场景包含测试设施。
 - `TestScene` 的 `--max-ticks` 是测试自动退出机制，不是游戏规则。
 - 当前建筑拆除逻辑未完成，不能把“按钮已出现”当成“拆除已实现”。
-- 当前 AI 重构处于过渡状态，代码中的旧 `HumanAI` 与目标文档并不完全一致。
-- 当前 `Human.tscn` 会无参实例化 `HumanAI`，而旧 `HumanAI._init(host)` 要求一个参数，
-  因此无头运行会重复报 `Method expected 1 argument(s), but called with 0`；不要把这类日志当成
-  测试通过，也不要通过再创建一个 AI 实例来掩盖冲突。
-- `TICKS_PER_DAY` 已经是 `1800`，部分源码注释仍写着旧的 `300`，修改时间逻辑时不要被误导。
+- `TICKS_PER_DAY` 是 `1800`，`TickManager` 的一天刻数、倍速和游戏内秒换算必须一起核对。
+- 状态脚本覆盖插件回调时先调用 `super._ready()`，否则 `godot_state_charts` 的内部状态引用不会建立。
 - 建筑放置不检查是否站着居民；压住人时要靠脱困流程处理，不是放置失败。
 - `WorldGrid.world_to_cell()` 会把世界外坐标夹到边界格，做严格范围校验时应先用 `is_in_bounds()`。
 - 预览建筑不能注册、不能占格，也不能接收会吞掉放置点击的鼠标事件。
