@@ -221,11 +221,17 @@ func _auto_test_placement() -> void:
 	var human_cell := WorldGridGlobal.world.world_to_cell(before_pos)
 	_placer.select_kind(PlacementController.Kind.WATER)
 	var on_human_ok := _placer.place_at_cell(human_cell)
-	var victim_snapshot := victim.ai.get_debug_snapshot()
-	var moved_ok: bool = (
-		bool(victim_snapshot["relocating"])
-		or victim.position != before_pos
-	)
+	# StateChart 延迟进入初始状态，pending 脱困请求要到后续 tick 才会派发。
+	var moved_ok := false
+	for _wait_tick in range(3):
+		await TickManager.tick_advanced
+		var victim_snapshot := victim.ai.get_debug_snapshot()
+		moved_ok = (
+			bool(victim_snapshot["relocating"])
+			or victim.position != before_pos
+		)
+		if moved_ok:
+			break
 	print("[AUTOPLACE] 压着居民放建筑=%s（应 true） 居民被挤出来=%s（应 true）" % [on_human_ok, moved_ok])
 
 	print("[AUTOPLACE] 建筑 %d -> %d，居民 %d -> %d" % [
