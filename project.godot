@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="New World"
-config/version="0.0.1.2"
+config/version="0.0.1.4"
 run/main_scene="res://Scenes/Colony.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="uid://ofm4rbgt6kj8"
@@ -20,6 +20,7 @@ config/icon="uid://ofm4rbgt6kj8"
 
 WorldGridGlobal="*res://Scripts/Grid/WorldGridGlobal.gd"
 TickManager="*res://Scripts/Core/TickManager.gd"
+MaterialSystem="*res://Scripts/Core/MaterialSystem.gd"
 
 [display]
 

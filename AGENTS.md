@@ -6,12 +6,12 @@
 
 ## 1. 项目定位
 
-这是一个使用 Godot 4.7 开发的 2D 殖民地模拟原型，当前项目版本为 `0.0.1.2`。
+这是一个使用 Godot 4.7 开发的 2D 殖民地模拟原型，当前项目版本为 `0.0.1.4`。
 
 - 主场景是 `Scenes/Colony.tscn`，集成检查场景是 `Scenes/TestScene.tscn`。
 - 游戏按“刻”推进，不是按帧推进；建筑、居民、Buff 和资源结算都与 `TickManager` 对齐。
 - 世界按正方形网格组织，`1 格 = 1 米`，`WorldGrid.CELL_SIZE = 10` 像素。
-- 当前核心循环是居民取水、取食、上班、消耗、Buff 和建筑放置。
+- 当前核心循环是居民取水、取食、按雇佣关系上班、完成工作周期、消耗、Buff、物资结算和建筑放置。
 - 项目没有自动化测试框架、格式化工具或静态检查工具，验证主要依赖 Godot
   无头运行、日志断言和编辑器人工检查。
 
@@ -36,8 +36,11 @@ godot --headless --path . Scenes/TestScene.tscn -- --autoplace --speed=20 --max-
 # Buff 链路检查
 godot --headless --path . Scenes/TestScene.tscn -- --bufftest --speed=20 --max-ticks=140
 
+# v0.0.1.4 完整验收（逐项输出 PASS/FAIL）
+godot --headless --path . --log-file .godot/v014_acceptance.log --scene res://Scenes/TestScene.tscn -- --acceptance
+
 # 导出调试版，输出目录被 .gitignore 忽略
-godot --headless --path . --export-debug "Windows Desktop" build/0.0.1.2/new_world.exe
+godot --headless --path . --export-debug "Windows Desktop" build/0.0.1.4/new_world.exe
 ```
 
 `Scenes/TestScene.tscn` 的测试参数位于引擎参数分隔符 `--` 之后。常用的用户参数有：
@@ -48,6 +51,7 @@ godot --headless --path . --export-debug "Windows Desktop" build/0.0.1.2/new_wor
 | `--max-ticks=600` | 跑满指定刻数后退出；无头测试必须提供，避免进程不退出 |
 | `--autoplace` | 自动放置建筑和居民，检查合法放置、非法放置、重叠和挤出逻辑 |
 | `--bufftest` | 在固定刻数添加疲劳、眩晕和口渴，检查倍率、工作闸门和到期 |
+| `--acceptance` | 运行 v0.0.1.4 全部雇佣、班次、周期、库存、清算和 UI 契约自检 |
 | `--shot=路径.png` | 在满足条件时截取当前画面；视觉检查仍优先使用编辑器窗口 |
 
 运行后不要只看退出码。Godot 可能出现脚本错误但进程仍然结束的情况，必须检查输出里是否含有
@@ -66,9 +70,10 @@ Scripts/
   Core/                    刻调度和全局时间规则
   World/                   世界骨架、殖民地、相机和放置控制
   Grid/                    全局网格、寻路、格子坐标换算和网格显示
-  Building/                建筑基类、取水站、取食站、工作站
-  Human/                   居民实体、移动、表现、AI、状态基类
+  Building/                建筑基类、取水站、取食站、工作站、仓库
+  Human/                   居民实体、移动、表现、AI、状态基类、工作行为
   Buff/                    Buff 系统、基类和具体 Buff
+  Material/                物品、库存、工作类型和工作周期数据模型
   UI/                      建筑详情页
   Debug/                   调试面板、放置检查和 Buff 自检
   Enum/                    全局枚举
@@ -150,9 +155,8 @@ build/                     本地导出目录，不提交
 - 新建筑压住居民时，居民能离开并继续行为。
 - 已放置建筑退出场景树后不再参与每刻更新。
 
-当前 `Building.remove()` 尚未实现，详情页的“摧毁建筑”按钮目前只走占位逻辑。
-如需补全拆除，必须在同一个完整流程里注销建筑、恢复其占用的格子、清理占用关系和 UI 引用，
-并处理仍站在建筑内或附近的居民。
+`Building.remove()` 会先结束雇佣和周期，再注销建筑、恢复占格并清算自带库存。
+修改拆除流程时仍必须保证 UI 引用、居民占用和物资锁定不产生悬空关系。
 
 ### 4.6 居民、AI 与移动
 
@@ -304,7 +308,7 @@ refactor: 将居民移动逻辑迁移到 HumanMotion
 
 - 主场景是 `Colony`，但自动化检查通常显式加载 `TestScene`；不要假设主场景包含测试设施。
 - `TestScene` 的 `--max-ticks` 是测试自动退出机制，不是游戏规则。
-- 当前建筑拆除逻辑未完成，不能把“按钮已出现”当成“拆除已实现”。
+- 拆除建筑会取消相关工作和周期；不要把直接 `queue_free()` 当作完整拆除流程。
 - `TICKS_PER_DAY` 是 `1800`，`TickManager` 的一天刻数、倍速和游戏内秒换算必须一起核对。
 - 状态脚本覆盖插件回调时先调用 `super._ready()`，否则 `godot_state_charts` 的内部状态引用不会建立。
 - 建筑放置不检查是否站着居民；压住人时要靠脱困流程处理，不是放置失败。

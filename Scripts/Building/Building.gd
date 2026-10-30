@@ -48,12 +48,59 @@ var preview_valid: bool = true
 ## 谁需要「选中建筑」就接这个信号，建筑本身不认识详情页。
 signal clicked(building: Building)
 
+## 雇佣名单或目标人数发生变化。
+signal employment_changed(building: Building)
+
+## 工作周期成功结算后，建筑只在这里接收一次结果。
+signal work_result_received(building: Building, result: Dictionary)
+
 ## 建筑类型 → 图标贴图（放在 Assets/Icons/ 下，改图标只要换图）
 const GLYPH_TEXTURES: Dictionary = {
 	GlobalEnum.BuildingType.WATER: preload("res://Assets/Icons/water.png"),
 	GlobalEnum.BuildingType.FOOD: preload("res://Assets/Icons/food.png"),
 	GlobalEnum.BuildingType.WORK: preload("res://Assets/Icons/work.png"),
+	GlobalEnum.BuildingType.WAREHOUSE: preload("res://Assets/Icons/work.png"),
 }
+
+## 可选的库存容量。0 表示没有库存能力。
+@export var inventory_capacity: int = 0
+
+## 是否为外部公共仓库。
+@export var is_warehouse: bool = false
+
+## 是否为可雇佣建筑。
+@export var is_hireable: bool = false
+
+## 可设置的目标人数上限。
+@export var max_workers: int = 0
+
+## 目标人数。设置时会立即夹到合法范围，实际补招/解雇在下一建筑刻完成。
+@export var target_workers: int = 0:
+	set(value):
+		target_workers = clampi(value, 0, max_workers)
+
+## 默认只雇佣成年人；具体建筑可放宽。
+@export var allow_child_workers: bool = false
+@export var allow_old_workers: bool = false
+
+## 眩晕、虚弱等临时不能工作是否直接解除雇佣。默认保留关系。
+@export var release_on_temporary_disability: bool = false
+
+## 隐藏运行阈值。它不是目标人数下限，也不显示在详情页。
+@export var hidden_run_threshold: int = 0
+
+## 当前有效的雇员名单。
+var employees: Array[Human] = []
+
+## 可选自带库存。
+var inventory: Inventory = null
+
+## 当前建筑使用的正式工作类型；没有工作类型时不开始周期。
+var work_type: WorkType = null
+
+## 最近一次成功结算结果和累计次数，供建筑自身或调试面板查询。
+var last_work_result: Dictionary = {}
+var work_result_count: int = 0
 
 ## 主体按钮：既是外观，也是点击区
 var _body_button: Button = null
@@ -70,14 +117,19 @@ var _entrance_marks: Array[ColorRect] = []
 ## 详情页的板块列表，见 [method build_detail]
 var _detail_sections: Array[Dictionary] = []
 
+## 防止 remove() 与 _exit_tree() 重复清算。
+var _lifecycle_cleaned: bool = false
+
 
 func _ready() -> void:
+	_ensure_inventory()
 	_build_visuals()
 	_register_if_placed()
 
 
 func _exit_tree() -> void:
-	TickManager.unregister_building(self)
+	if not _lifecycle_cleaned:
+		_prepare_for_removal()
 
 
 ## 成功放置且已进入场景树后才登记。失败建筑和预览都不会走到这里。
@@ -89,7 +141,9 @@ func _register_if_placed() -> void:
 
 ## 每刻由 [TickManager] 调用。基类什么都不做，子类按需要覆盖。
 func on_tick() -> void:
-	pass
+	if is_hireable:
+		_recheck_employees()
+		_adjust_worker_count()
 
 
 ## 居民到达出入口后要在这个建筑里等几刻。基类返回 0，子类覆盖。
@@ -214,7 +268,7 @@ func can_place_at(world: WorldGrid, origin: Vector2i) -> bool:
 ## 只有放置成功后才登记到 [TickManager]。
 func place_at(world: WorldGrid, origin: Vector2i) -> bool:
 	if not can_place_at(world, origin):
-		push_warning("Building.place_at: %s 无法放在 %s" % [name, origin])
+		print_verbose("Building.place_at: %s 无法放在 %s" % [name, origin])
 		return false
 
 	origin_cell = origin
@@ -225,6 +279,9 @@ func place_at(world: WorldGrid, origin: Vector2i) -> bool:
 		world.set_walkable(cell, false)
 
 	is_placed = true
+	_ensure_inventory()
+	if inventory != null:
+		MaterialSystem.register_inventory(inventory, self)
 	_register_if_placed()
 	queue_redraw()
 	return true
@@ -370,6 +427,41 @@ func _on_body_pressed() -> void:
 ## 调不调 [code]super.build_detail()[/code] 都不会把自己的内容清掉。
 func build_detail() -> void:
 	add_section("status", "状态")
+	add_row("status", "建筑类型", GlobalEnum.BuildingType.keys()[building_type])
+
+	if is_hireable:
+		add_section("employment", "雇佣")
+		add_row("employment", "当前雇员", "%d / %d" % [employees.size(), max_workers])
+		add_number_input(
+			"employment",
+			"目标人数",
+			"target_workers",
+			0,
+			max_workers,
+			target_workers,
+			set_target_workers,
+		)
+		add_row(
+			"employment",
+			"当前班次",
+			"工作时间内" if is_work_time() else "下班",
+		)
+
+	if inventory != null:
+		add_section("inventory", "库存")
+		add_row("inventory", "容量", "%d" % inventory.capacity)
+		add_row("inventory", "已用体积", "%d" % inventory.get_used_volume())
+		add_row("inventory", "已预留体积", "%d" % inventory.reserved_volume)
+		add_row("inventory", "可用体积", "%d" % inventory.get_available_volume())
+		for item_type in MaterialTypes.get_item_types():
+			add_row(
+				"inventory",
+				MaterialTypes.get_display_name(item_type),
+				"%d（锁定 %d）" % [
+					inventory.get_item_count(item_type),
+					inventory.get_locked_quantity(item_type),
+				],
+			)
 
 
 ## 给外面（详情页）取一份当前内容。[br]
@@ -393,10 +485,38 @@ func add_row(section_id: String, label: String, value: String, key: String = "")
 				"key": key if key != "" else label,
 				"label": label,
 				"value": value,
+				"kind": "text",
 				"hidden": false,
 			})
 			return
 	push_warning("add_row：没有 %s 这个板块" % section_id)
+
+
+## 添加一行通用数字输入控件。UI 不识别具体建筑，只读取范围、当前值和写入回调。
+func add_number_input(
+	section_id: String,
+	label: String,
+	key: String,
+	minimum: int,
+	maximum: int,
+	value: int,
+	on_changed: Callable,
+) -> void:
+	for section in _detail_sections:
+		if section["id"] == section_id:
+			section["rows"].append({
+				"key": key,
+				"label": label,
+				"value": "",
+				"kind": "number",
+				"min": minimum,
+				"max": maximum,
+				"current": value,
+				"on_changed": on_changed,
+				"hidden": false,
+			})
+			return
+	push_warning("add_number_input：没有 %s 这个板块" % section_id)
 
 
 ## 整个板块不显示
@@ -436,4 +556,181 @@ func _is_edge_adjacent(cell: Vector2i, rect: Rect2i) -> bool:
 
 ## 逻辑等待补全！！！
 func remove() -> void:
-	print("remove")
+	_prepare_for_removal()
+	queue_free()
+
+
+# ---------------------------------------------------------------------------
+# 可选能力：雇佣、班次、库存与工作结果
+# ---------------------------------------------------------------------------
+
+func _ensure_inventory() -> void:
+	if inventory_capacity <= 0:
+		inventory = null
+		return
+	if inventory == null:
+		inventory = Inventory.new(inventory_capacity)
+	else:
+		inventory.capacity = inventory_capacity
+
+
+func can_accept_employee(human: Human) -> bool:
+	if not is_hireable or not is_placed:
+		return false
+	if not is_instance_valid(human) or not human.is_inside_tree():
+		return false
+	if human.employer != null and human.employer != self:
+		return false
+	if employees.has(human):
+		return false
+	return can_accept_age(human)
+
+
+func is_employee_eligible(human: Human) -> bool:
+	if not is_instance_valid(human) or not human.is_inside_tree():
+		return false
+	if human.employer != self:
+		return false
+	if release_on_temporary_disability and not human.buff_system.can_work():
+		return false
+	return can_accept_age(human)
+
+
+func can_accept_age(human: Human) -> bool:
+	if not is_instance_valid(human):
+		return false
+	match human.age_status:
+		GlobalEnum.AgeStatus.CHILD:
+			return allow_child_workers
+		GlobalEnum.AgeStatus.OLD:
+			return allow_old_workers
+		_:
+			return true
+
+
+func hire_employee(human: Human) -> bool:
+	if not can_accept_employee(human):
+		return false
+	employees.append(human)
+	human.bind_employer(self)
+	employment_changed.emit(self)
+	return true
+
+
+func dismiss_employee(human: Human, reason: String = "雇佣结束") -> bool:
+	if not employees.has(human):
+		return false
+	employees.erase(human)
+	if is_instance_valid(human):
+		human.notify_employment_ended(self, reason)
+	employment_changed.emit(self)
+	return true
+
+
+func set_target_workers(value: int) -> void:
+	target_workers = value
+	employment_changed.emit(self)
+
+
+func get_employee_count() -> int:
+	return employees.size()
+
+
+func is_work_time(tick_of_day: int = -1) -> bool:
+	var tick := TickManager.get_tick_of_day() if tick_of_day < 0 else tick_of_day
+	@warning_ignore("integer_division")
+	var start_tick := TickManager.TICKS_PER_DAY / 3
+	@warning_ignore("integer_division")
+	var end_tick := (TickManager.TICKS_PER_DAY * 5) / 6
+	return tick >= start_tick and tick < end_tick
+
+
+func accept_work_result(result: Dictionary) -> bool:
+	if not is_placed or result.is_empty():
+		return false
+	last_work_result = result.duplicate(true)
+	work_result_count += 1
+	work_result_received.emit(self, result)
+	return true
+
+
+## 普通存入。仓库接受任何合法物品；自带库存只接受本建筑自己的产出。
+func try_deposit_items(
+	items_to_add: Dictionary,
+	producer: Building = null,
+) -> bool:
+	_ensure_inventory()
+	if inventory == null:
+		return false
+	if not is_warehouse and producer != self:
+		return false
+	return inventory.add_items_unchecked(items_to_add)
+
+
+## 任何居民都可以取用未锁定物品；被锁定数量会由 MaterialSystem 排除。
+func try_withdraw_items(
+	item_type: int,
+	quantity: int,
+	holder: String,
+) -> bool:
+	_ensure_inventory()
+	if inventory == null:
+		return false
+	return MaterialSystem.withdraw_items(inventory, item_type, quantity, holder)
+
+
+func _recheck_employees() -> void:
+	var invalid: Array[Human] = []
+	for human in employees:
+		if not is_employee_eligible(human):
+			invalid.append(human)
+	for human in invalid:
+		dismiss_employee(human, "永久雇佣资格失效")
+
+
+func _adjust_worker_count() -> void:
+	var target := clampi(target_workers, 0, max_workers)
+	if employees.size() > target:
+		_dismiss_excess(employees.size() - target)
+	elif employees.size() < target:
+		_fill_vacancies(target - employees.size())
+
+
+func _fill_vacancies(vacancy_count: int) -> void:
+	for human in TickManager.humans:
+		if vacancy_count <= 0:
+			break
+		if hire_employee(human):
+			vacancy_count -= 1
+
+
+func _dismiss_excess(excess_count: int) -> void:
+	while excess_count > 0 and not employees.is_empty():
+		var index := randi_range(0, employees.size() - 1)
+		dismiss_employee(employees[index], "目标人数降低")
+		excess_count -= 1
+
+
+func _prepare_for_removal() -> void:
+	if _lifecycle_cleaned:
+		return
+	_lifecycle_cleaned = true
+
+	if not MaterialSystem.is_scene_shutdown():
+		var current_employees := employees.duplicate()
+		for human in current_employees:
+			dismiss_employee(human, "雇主建筑已删除")
+
+	TickManager.unregister_building(self)
+
+	if is_placed:
+		var world := WorldGridGlobal.world
+		for cell in get_occupied_cells():
+			if world.is_in_bounds(cell):
+				world.set_walkable(cell, true)
+
+	_ensure_inventory()
+	if inventory != null:
+		MaterialSystem.cleanup_owner_inventory(self, origin_cell, display_name)
+	is_placed = false
+	employees.clear()

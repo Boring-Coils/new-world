@@ -13,6 +13,7 @@ enum Kind {
 	WATER, ## 取水站
 	FOOD,  ## 取食站
 	WORK,  ## 工作站
+	WAREHOUSE, ## 仓库
 	HUMAN, ## 居民
 }
 
@@ -220,6 +221,8 @@ func _create_building(kind_value: Kind) -> Building:
 			return FoodStation.new()
 		Kind.WORK:
 			return WorkStation.new()
+		Kind.WAREHOUSE:
+			return Warehouse.new()
 		_:
 			return Building.new()
 

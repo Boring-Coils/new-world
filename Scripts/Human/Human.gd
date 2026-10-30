@@ -26,6 +26,12 @@ const MAX_FOOD: float = 700.0
 ## 当前所在的建筑；进入工作站和原子离站都通过该字段表达占用关系。
 var in_building: Building = null
 
+## 当前雇主。一个居民同一时间最多只有一个有效雇主。
+var employer: Building = null
+
+## 等待点附近的稳定个人偏移，绝对值不超过半格（5 像素）。
+var wait_offset: Vector2 = Vector2.ZERO
+
 
 ## 居民必须从场景实例化，否则会缺少 AI、Motion 和 BuffSystem。
 static func create() -> Human:
@@ -33,6 +39,7 @@ static func create() -> Human:
 
 
 func _ready() -> void:
+	_init_wait_offset()
 	buff_system.attach(self)
 	visual.outfit = outfit
 	visual.set_moving(false)
@@ -46,7 +53,38 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
+	if is_instance_valid(ai):
+		ai.cleanup_before_removal()
+	if is_instance_valid(employer):
+		employer.dismiss_employee(self, "居民离开场景")
+		employer = null
 	TickManager.unregister_human(self)
+
+
+func bind_employer(building: Building) -> void:
+	employer = building
+
+
+func notify_employment_ended(building: Building, reason: String) -> void:
+	if employer == building:
+		employer = null
+	if is_instance_valid(ai):
+		ai.on_employment_ended(building, reason)
+
+
+func has_employer() -> bool:
+	return is_instance_valid(employer)
+
+
+func can_work() -> bool:
+	return is_instance_valid(buff_system) and buff_system.can_work()
+
+
+func _init_wait_offset() -> void:
+	var seed_value := absi(hash(get_instance_id()))
+	var x_ratio := float(seed_value % 1001) / 1000.0
+	var y_ratio := float((seed_value / 1001) % 1001) / 1000.0
+	wait_offset = Vector2(x_ratio * 8.0 - 4.0, y_ratio * 8.0 - 4.0)
 
 
 ## 每刻固定顺序：Buff 结算、基础消耗、AI 决策与行动。

@@ -11,6 +11,7 @@ enum Goal {
 	WATER,
 	FOOD,
 	WORK,
+	WAIT,
 }
 
 enum WorkInterrupt {
@@ -40,6 +41,7 @@ var human: Human
 var motion: HumanMotion
 
 var _context := HumanAIContext.new()
+var _work_behavior := HumanWorkBehavior.new()
 var _goal: int = Goal.NONE
 var _target: Building = null
 var _active_state: HumanStateBase = null
@@ -49,6 +51,7 @@ var _tick_count: int = 0
 var _decision_offset: int = 0
 var _force_decision: bool = true
 var _pending_relocation: bool = false
+var _at_wait_place: bool = false
 
 
 func bind(host: Human) -> void:
@@ -57,6 +60,7 @@ func bind(host: Human) -> void:
 
 	human = host
 	motion = human.motion
+	_work_behavior.bind(human, self)
 	_decision_offset = randi() % DECISION_INTERVAL
 
 	_bind_state_nodes(state_chart)
@@ -100,10 +104,21 @@ func on_tick() -> void:
 
 
 func _on_motion_arrived(_destination: Vector2i) -> void:
+	if _active_state_key == &"working" and _work_behavior.is_busy():
+		_work_behavior.on_motion_arrived()
+		return
+	if _goal == Goal.WAIT:
+		_at_wait_place = true
+		send_event(EVENT_TARGET_INVALID)
+		return
 	send_event(EVENT_ARRIVED)
 
 
 func _on_motion_path_failed(_destination: Vector2i) -> void:
+	if _active_state_key == &"working" and _work_behavior.is_busy():
+		_work_behavior.on_path_failed()
+		send_event(EVENT_WORK_CANCELLED)
+		return
 	send_event(EVENT_PATH_FAILED)
 
 
@@ -118,11 +133,16 @@ func on_idle_entered() -> void:
 
 
 func try_select_idle_goal() -> bool:
+	_context.refresh(human)
 	if not _consume_decision_slot():
 		return false
 
 	for goal in HumanDecision.rank_goals(_context):
-		if goal == Goal.WORK and not _context.can_work:
+		if goal == Goal.WATER and not _is_water_urgent():
+			continue
+		if goal == Goal.FOOD and not _is_food_urgent():
+			continue
+		if goal == Goal.WORK and not _is_work_goal_available():
 			continue
 
 		var building := _find_target_for_goal(goal)
@@ -132,7 +152,14 @@ func try_select_idle_goal() -> bool:
 		_set_goal(goal, building)
 		return true
 
+	if not _at_wait_place:
+		_set_goal(Goal.WAIT, null)
+		return true
 	return false
+
+
+func force_next_decision() -> void:
+	_force_decision = true
 
 
 func _consume_decision_slot() -> bool:
@@ -145,6 +172,36 @@ func _consume_decision_slot() -> bool:
 	return true
 
 
+func _is_water_urgent() -> bool:
+	var urgent_ticks := HumanDecision.URGENT_GAME_SECONDS / TickManager.GAME_SECONDS_PER_TICK
+	return _context.water_ticks_left <= urgent_ticks
+
+
+func _is_food_urgent() -> bool:
+	var urgent_ticks := HumanDecision.URGENT_GAME_SECONDS / TickManager.GAME_SECONDS_PER_TICK
+	return _context.food_ticks_left <= urgent_ticks
+
+
+func _is_work_goal_available() -> bool:
+	return (
+		_context.can_work
+		and is_instance_valid(human.employer)
+		and human.employer.is_placed
+		and human.employer.is_hireable
+		and human.employer.employees.has(human)
+		and human.employer.work_type != null
+		and human.employer.is_work_time()
+	)
+
+
+func _start_wait_travel() -> bool:
+	var world_node := human.get_parent()
+	if not world_node is World:
+		return false
+	var wait_position: Vector2 = (world_node as World).WAIT_PLACE + human.wait_offset
+	return motion.move_to_position(wait_position)
+
+
 func _find_target_for_goal(goal: int) -> Building:
 	match goal:
 		Goal.WATER:
@@ -152,9 +209,11 @@ func _find_target_for_goal(goal: int) -> Building:
 		Goal.FOOD:
 			return motion.find_nearest_building(GlobalEnum.BuildingType.FOOD)
 		Goal.WORK:
-			var building := motion.find_nearest_building(GlobalEnum.BuildingType.WORK)
-			if building is WorkStation:
-				return building
+			if (
+				_is_work_goal_available()
+				and is_instance_valid(human.employer)
+			):
+				return human.employer
 			return null
 		_:
 			return null
@@ -164,6 +223,8 @@ func _set_goal(new_goal: int, new_target: Building) -> void:
 	var old_goal := _goal
 	_goal = new_goal
 	_target = new_target
+	if new_goal != Goal.WAIT:
+		_at_wait_place = false
 	if old_goal != new_goal:
 		goal_changed.emit(old_goal, new_goal)
 
@@ -181,6 +242,8 @@ func get_target() -> Building:
 
 
 func is_target_valid() -> bool:
+	if _goal == Goal.WAIT:
+		return true
 	if not is_instance_valid(_target) or _target.is_queued_for_deletion():
 		return false
 	if not _target.is_placed or not TickManager.buildings.has(_target):
@@ -192,7 +255,11 @@ func is_target_valid() -> bool:
 		Goal.FOOD:
 			return _target.building_type == GlobalEnum.BuildingType.FOOD
 		Goal.WORK:
-			return _target is WorkStation
+			return (
+				_target == human.employer
+				and _target.is_hireable
+				and _target.employees.has(human)
+			)
 		_:
 			return false
 
@@ -202,6 +269,8 @@ func is_work_allowed() -> bool:
 
 
 func start_travel_to_current_target() -> bool:
+	if _goal == Goal.WAIT:
+		return _start_wait_travel()
 	if not is_target_valid():
 		send_event(EVENT_TARGET_INVALID)
 		return false
@@ -226,21 +295,66 @@ func complete_current_wait() -> StringName:
 			clear_goal()
 			return EVENT_SERVICE_COMPLETED
 		GlobalEnum.BuildingType.WORK:
+			if not _is_work_goal_available() or _target.work_type == null:
+				return EVENT_WORK_CANCELLED
 			return EVENT_WORK_STARTED
 		_:
 			clear_goal()
 			return EVENT_TARGET_INVALID
 
 
-func enter_current_workstation() -> bool:
-	if not is_target_valid() or not (_target is WorkStation):
+func begin_work_cycle() -> bool:
+	if not is_target_valid() or not is_instance_valid(human.employer):
 		return false
+	return _work_behavior.begin(human.employer)
 
-	var station := _target as WorkStation
-	station.enter(human)
-	human.in_building = station
-	human.set_world_visibility(false)
-	return true
+
+func tick_work_cycle() -> StringName:
+	return _work_behavior.tick()
+
+
+func is_work_cycle_locked() -> bool:
+	return _work_behavior.is_locked()
+
+
+func cancel_work_cycle(reason: String = "工作周期取消") -> void:
+	_work_behavior.cancel(reason)
+
+
+func get_work_phase_name() -> StringName:
+	return _work_behavior.get_phase_name()
+
+
+func get_work_behavior() -> HumanWorkBehavior:
+	return _work_behavior
+
+
+func get_reachable_warehouse_inventories() -> Array[Inventory]:
+	var candidates: Array[Dictionary] = []
+	for warehouse in TickManager.get_buildings_of_type(GlobalEnum.BuildingType.WAREHOUSE):
+		if not is_instance_valid(warehouse) or warehouse.inventory == null:
+			continue
+		var ticks := motion.get_ticks_to_building_instance(warehouse)
+		if ticks >= 0:
+			candidates.append({
+				"inventory": warehouse.inventory,
+				"ticks": ticks,
+				"origin": warehouse.origin_cell,
+			})
+	candidates.sort_custom(
+		func(a: Dictionary, b: Dictionary) -> bool:
+			if int(a["ticks"]) != int(b["ticks"]):
+				return int(a["ticks"]) < int(b["ticks"])
+			var a_origin: Vector2i = a["origin"]
+			var b_origin: Vector2i = b["origin"]
+			if a_origin.x != b_origin.x:
+				return a_origin.x < b_origin.x
+			return a_origin.y < b_origin.y
+	)
+	var result: Array[Inventory] = []
+	for candidate in candidates:
+		result.append(candidate["inventory"])
+	return result
 
 
 func try_interrupt_work_goal() -> bool:
@@ -262,26 +376,39 @@ func try_interrupt_work_goal() -> bool:
 
 
 func evaluate_work_interrupt() -> int:
-	if not is_target_valid():
-		return WorkInterrupt.CANCEL
-	if human.in_building != _target:
+	if not is_target_valid() or not is_instance_valid(human.employer):
 		return WorkInterrupt.CANCEL
 	if not is_work_allowed():
 		return WorkInterrupt.CANCEL
 
-	if try_interrupt_work_goal():
-		return WorkInterrupt.TRAVEL
-
+	# 锁定周期内口渴、饥饿和下班都不能打断；只有 Buff 工作闸门等硬中断生效。
+	if _work_behavior.is_locked():
+		return WorkInterrupt.NONE
 	return WorkInterrupt.NONE
 
 
 func leave_work_now() -> bool:
+	cancel_work_cycle("居民离开工作")
 	if is_instance_valid(human.in_building):
 		return motion.leave_current_building()
 
 	human.in_building = null
 	human.set_world_visibility(true)
 	return false
+
+
+func on_employment_ended(building: Building, reason: String) -> void:
+	if human.employer == building:
+		human.employer = null
+	cancel_work_cycle(reason)
+	clear_goal()
+	motion.stop()
+	send_event(EVENT_WORK_CANCELLED)
+
+
+func cleanup_before_removal() -> void:
+	cancel_work_cycle("居民离开场景")
+	clear_goal()
 
 
 func request_relocation() -> void:
@@ -314,6 +441,7 @@ func get_debug_snapshot() -> Dictionary:
 		"goal_name": Goal.keys()[_goal],
 		"state": _active_state_key,
 		"target": target_name,
+		"employer": human.employer.name if is_instance_valid(human.employer) else "",
 		"target_valid": is_target_valid(),
 		"water_ticks_left": _context.water_ticks_left,
 		"food_ticks_left": _context.food_ticks_left,
@@ -321,6 +449,8 @@ func get_debug_snapshot() -> Dictionary:
 		"moving": motion.is_moving(),
 		"path_size": motion.get_path_size(),
 		"relocating": motion.is_relocating(),
+		"work_phase": get_work_phase_name(),
+		"work_locked": _work_behavior.is_locked(),
 		"wait_left": (
 			_active_state.get_debug_data().get("wait_left", 0)
 			if is_instance_valid(_active_state)

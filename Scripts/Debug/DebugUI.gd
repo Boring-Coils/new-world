@@ -68,7 +68,8 @@ func _build() -> void:
 
 	_add_button(grid, "无限取水站", PlacementController.Kind.WATER)
 	_add_button(grid, "无限取食站", PlacementController.Kind.FOOD)
-	_add_button(grid, "无限工作站", PlacementController.Kind.WORK)
+	_add_button(grid, "加工工作站", PlacementController.Kind.WORK)
+	_add_button(grid, "仓库", PlacementController.Kind.WAREHOUSE)
 	_add_button(grid, "居民", PlacementController.Kind.HUMAN)
 	_add_button(grid, "取消", PlacementController.Kind.NONE)
 
@@ -106,7 +107,9 @@ func _on_button(kind: int) -> void:
 		PlacementController.Kind.FOOD:
 			_mode_label.text = "放置：无限取食站"
 		PlacementController.Kind.WORK:
-			_mode_label.text = "放置：无限工作站"
+			_mode_label.text = "放置：加工工作站"
+		PlacementController.Kind.WAREHOUSE:
+			_mode_label.text = "放置：仓库"
 		PlacementController.Kind.HUMAN:
 			_mode_label.text = "放置：居民"
 		_:

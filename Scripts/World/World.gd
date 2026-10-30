@@ -8,12 +8,18 @@ class_name World
 
 ## 相机对着哪里、缩放多少，见 [CameraRig]
 
-var WAIT_PLACE = Vector2(480, 500)
+## 未就业和下班居民的世界等待锚点（像素坐标）。
+const WAIT_PLACE := Vector2(4800, 5000)
 
 func _ready() -> void:
+	MaterialSystem.start_scene()
 	_setup_camera()
 	_setup_grid()
 	_setup_detail_panel()
+
+
+func _exit_tree() -> void:
+	MaterialSystem.begin_scene_shutdown()
 
 
 ## 右侧详情页：属于世界级 UI，所以放这里，Colony 和 TestScene 都有

@@ -32,7 +32,7 @@ script = ExtResource("5_ai")
 
 [node name="StateChart" type="Node" parent="HumanAI" unique_id=1746601749]
 script = ExtResource("6_chart")
-track_in_editor = true
+track_in_editor = false
 warn_on_sending_unknown_events = true
 
 [node name="Lifecycle" type="Node" parent="HumanAI/StateChart" unique_id=1506175379]

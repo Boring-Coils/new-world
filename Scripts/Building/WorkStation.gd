@@ -18,7 +18,12 @@ func _init() -> void:
 	size_cells = Vector2i(6, 4)
 	entrance_offsets = [Vector2i(2, 4), Vector2i(3, -1)]
 	body_color = Color(0.45, 0.45, 0.5)
-	display_name = "无限工作站"
+	display_name = "加工工作站"
+	is_hireable = true
+	max_workers = 3
+	target_workers = 3
+	inventory_capacity = 1000
+	work_type = WorkType.create_fabrication()
 
 
 func get_wait_ticks() -> int:
@@ -45,3 +50,7 @@ func get_occupant_count() -> int:
 func build_detail() -> void:
 	super.build_detail()
 	add_row("status", "站内人数", "%d 人" % occupants.size(), "occupants")
+	add_row("status", "成功周期", "%d" % work_result_count)
+	if work_type != null:
+		add_row("status", "工作类型", work_type.display_name)
+		add_row("status", "周期耗时", "%d 刻" % work_type.duration_ticks)

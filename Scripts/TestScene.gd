@@ -12,6 +12,7 @@ const HUMAN_COUNT: int = 8
 const WATER_ORIGIN := Vector2i(464, 492)
 const FOOD_ORIGIN := Vector2i(469, 492)
 const WORK_ORIGIN := Vector2i(474, 492)
+const WAREHOUSE_ORIGIN := Vector2i(481, 492)
 
 ## 人散落在这个矩形范围内（格坐标，含两端）
 const HUMAN_SPAWN_MIN := Vector2i(466, 496)
@@ -41,9 +42,22 @@ var _autoplace: bool = false
 ## 调试用：buff 自检（--bufftest），具体逻辑在 [BuffSelfTest]
 var _bufftest: bool = false
 
+## 调试用：运行 v0.0.1.4 完整验收自检（--acceptance）。
+var _acceptance: bool = false
+
+## 调试用：打开指定详情页做 UI 截图检查（--ui-demo=work/warehouse）。
+var _ui_demo: String = ""
+
+## 集成场景中的核心建筑，验收自检和调试统计会读取它们。
+var work_station: WorkStation = null
+var warehouse: Warehouse = null
+
 
 func _ready() -> void:
+	_parse_early_args()
 	randomize()
+	if _acceptance:
+		TickManager.auto_run = false
 	# 相机和网格由 World 负责，本场景只加自己的东西
 	super._ready()
 
@@ -52,12 +66,24 @@ func _ready() -> void:
 	_setup_placement()
 	_setup_ui()
 
+	if _ui_demo != "":
+		_open_ui_demo.call_deferred()
 	if _autoplace:
 		_auto_test_placement.call_deferred()
 	if _bufftest:
 		var self_test := BuffSelfTest.new()
 		self_test.name = "BuffSelfTest"
 		add_child(self_test)
+	if _acceptance:
+		var acceptance := AcceptanceSelfTest.new()
+		acceptance.name = "AcceptanceSelfTest"
+		add_child(acceptance)
+
+
+func _parse_early_args() -> void:
+	for arg in OS.get_cmdline_user_args():
+		if arg == "--acceptance":
+			_acceptance = true
 
 
 func _setup_buildings() -> void:
@@ -75,11 +101,29 @@ func _setup_buildings() -> void:
 	if not food.place_at(world, FOOD_ORIGIN):
 		push_error("%s 放不下" % food.display_name)
 
-	var work := WorkStation.new()
-	work.name = work.display_name
-	add_child(work)
-	if not work.place_at(world, WORK_ORIGIN):
-		push_error("%s 放不下" % work.display_name)
+	work_station = WorkStation.new()
+	work_station.name = work_station.display_name
+	add_child(work_station)
+	if not work_station.place_at(world, WORK_ORIGIN):
+		push_error("%s 放不下" % work_station.display_name)
+	else:
+		work_station.inventory.add_items_unchecked({
+			MaterialTypes.ItemType.METAL: 30,
+			MaterialTypes.ItemType.PLASTIC: 30,
+		})
+
+	warehouse = Warehouse.new()
+	warehouse.name = warehouse.display_name
+	add_child(warehouse)
+	if not warehouse.place_at(world, WAREHOUSE_ORIGIN):
+		push_error("%s 放不下" % warehouse.display_name)
+	else:
+		warehouse.inventory.add_items_unchecked({
+			MaterialTypes.ItemType.WASTE: 20,
+			MaterialTypes.ItemType.METAL: 30,
+			MaterialTypes.ItemType.PLASTIC: 30,
+			MaterialTypes.ItemType.WIRE: 10,
+		})
 
 
 func _setup_humans() -> void:
@@ -145,12 +189,29 @@ func _setup_ui() -> void:
 			_autoplace = true
 		elif arg == "--bufftest":
 			_bufftest = true
+		elif arg == "--acceptance":
+			_acceptance = true
+		elif arg.begins_with("--ui-demo="):
+			_ui_demo = arg.trim_prefix("--ui-demo=")
 		elif arg.begins_with("--ghost="):
 			# 调试用：把放置预览钉在某一格，方便截图（参数形如 --ghost=477,500）
 			var parts := arg.trim_prefix("--ghost=").split(",")
 			if parts.size() == 2:
 				_placer.select_kind(PlacementController.Kind.WATER)
 				_placer.debug_hover_cell = Vector2i(parts[0].to_int(), parts[1].to_int())
+
+
+func _open_ui_demo() -> void:
+	var panel := get_node_or_null("BuildingDetailPanel") as BuildingDetailPanel
+	if panel == null:
+		return
+	match _ui_demo:
+		"warehouse":
+			panel.show_building(warehouse)
+		_:
+			panel.show_building(work_station)
+	_placer.select_kind(PlacementController.Kind.WAREHOUSE)
+	_placer.debug_hover_cell = Vector2i(490, 510)
 
 
 ## 调试用：自动放一个取水站、一个居民，再故意重叠放一次，验证「能放 / 不能放」两条路
@@ -327,6 +388,7 @@ func _process(_delta: float) -> void:
 
 	if TickManager.total_ticks >= _max_ticks:
 		print("[SIM] 结束，共 %d 刻（%.1f 天）" % [_max_ticks, _max_ticks / float(TickManager.TICKS_PER_DAY)])
+		MaterialSystem.begin_scene_shutdown()
 		get_tree().quit()
 
 

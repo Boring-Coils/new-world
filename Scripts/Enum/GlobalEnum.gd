@@ -12,6 +12,7 @@ enum BuildingType{
 	WATER,## 取水站
 	FOOD,## 取食站
 	WORK,## 工作站
+	WAREHOUSE,## 仓库
 }
 
 ## buff 类型。[br]

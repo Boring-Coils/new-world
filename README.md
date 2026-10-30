@@ -1,13 +1,9 @@
 # New World
 
-一个还在开发中的 2D 殖民地模拟原型，使用 Godot 4.7 和 GDScript。
+使用 Godot 4.7 和 GDScript 开发的 2D 殖民地模拟原型，当前版本为 `0.0.1.4`。
 
-目前还没有完整的经营循环，现阶段主要把几件事跑通：居民会根据水和食物的余量决定下一步去哪，
-通过动作状态机沿格子寻路，在建筑门口等几刻，再取水、取食或者进工作站。时间、消耗和移动都按
-同一个刻推进，不是各写各的 `_process`。
-
-主场景打开后是一块空地。可以从左上角的调试面板放建筑和居民，看看他们自己找路、等待和上班。
-`Scenes/TestScene.tscn` 是更完整的测试场景，开局会摆好水站、食物站、工作站和一批居民。
+游戏按“刻”推进。居民在生存需求、雇佣关系和班次之间做决策，通过状态机移动，
+在建筑入口完成取水、取食或工作准备；工作周期使用全局物资账本完成锁定、预留和结算。
 
 ## 运行
 
@@ -17,28 +13,28 @@
 godot --editor --path .
 ```
 
-也可以直接在 Godot 项目管理器里导入 `project.godot`。进入编辑器后按 `F6` 运行当前场景，
-或按 `F5` 运行主场景。
-
-想直接跑模拟检查：
+主场景是 `Scenes/Colony.tscn`。集成检查使用 `Scenes/TestScene.tscn`：
 
 ```powershell
-godot --headless --path . Scenes/TestScene.tscn -- --speed=20 --max-ticks=600
+godot --headless --path . --scene res://Scenes/TestScene.tscn -- --speed=20 --max-ticks=600
 ```
 
-`--max-ticks` 不要省。无头模式没有窗口可关，测试场景要靠这个参数自己退出。
+`--max-ticks` 不是游戏规则，只用于让无头测试自动退出。
 
-## 现在能做什么
+## v0.0.1.4 功能
 
-- 在空地上放取水站、取食站、工作站和居民，连续放也可以。
-- 建筑会检查占地、出入口和已有建筑；预览颜色会告诉你能不能放。
-- 居民按水、食物和工作的权重做决定，由状态机约束同一时间只执行一个主动作。
-- 工作站支持多个出入口，进站后居民会从画面上隐藏，统计面板里单独计数。
-- 有疲劳、眩晕、口渴和虚弱几种 Buff，会影响移动、消耗或能不能工作。
-- 点建筑可以看详情，左上角调试面板能看到当前时间、各状态人数和放置提示。
+- 可雇佣建筑维护目标人数、最大人数、年龄资格和雇员名单，每刻复检并补齐或随机解雇。
+- 居民同一时间最多有一个雇主；未就业和下班居民前往 `WAIT_PLACE` 附近的稳定个人偏移点。
+- 默认班次为当前游戏日的 `600..1499` 刻；班次内开始的周期可以跨过下班时刻完成。
+- 工作周期先锁定需求、预留产出空间并补齐路线，锁定后才开始计时和结算。
+- 眩晕、虚弱、解雇、雇主删除等硬中断会取消周期并归还需求和空间。
+- 物资系统支持废料、金属、塑料、线四种物品，以及数量锁定、容量预留、跨仓拆分和原子结算。
+- 独立仓库默认容量 2000，可工作建筑默认自带库存 1000。
+- 建筑和居民退出时会清理雇佣、工作、锁定、预留和库存，不留下悬空引用。
+- 建筑详情页支持目标人数输入，以及库存容量、已用、预留、可用体积和各物品数量。
 
-建筑放置不检查脚下有没有人。建筑压到居民时，居民会自己往最近的空地走；如果周围被堵死，
-就直接挪出去。
+详细规则见
+[v0.0.1.4 设计目录](Docs/v0.0.1.4(物质系统与雇佣工作机制)/README.md)。
 
 ## 操作
 
@@ -50,66 +46,74 @@ godot --headless --path . Scenes/TestScene.tscn -- --speed=20 --max-ticks=600
 | `WASD` 或方向键 | 平移视角 |
 | 滚轮 | 缩放 |
 | 单击建筑 | 打开详情页 |
-| 左键 | 放置模式下放下当前建筑或居民 |
+| 左键 | 放置模式下放下建筑或居民 |
 | 右键 / `Esc` | 取消放置 |
 
-放置按钮在左上角调试面板里。放下一个后不会自动退出放置模式，可以接着放。
+放置按钮在左上角调试面板中。放下一个后不会自动退出放置模式，可以连续放置。
 
 ## 时间与地图
 
-游戏内一天是 1800 刻，现实里默认 5 分钟走完。一天按游戏内 6 小时算，所以一刻等于 12 游戏秒。
-
-地图是 1000 × 1000 格，一格 10 像素。代码里默认 `1 格 = 1 米`，
-居民速度、每天喝多少水、吃多少食物都按这个换算关系计算。
+- 游戏内一天是 `1800` 刻。
+- 默认现实 `6` 刻/秒，因此一天约现实 300 秒。
+- 一天按游戏内 6 小时换算，一刻约 12 游戏秒。
+- 地图为 `1000 × 1000` 格，`1 格 = 1 米`，每格 10 像素。
 
 ## 代码位置
 
 | 目录 | 内容 |
 | --- | --- |
-| `Scripts/Core/` | 游戏时钟和每刻调度 |
+| `Scripts/Core/` | 游戏时钟、物资账本和全局服务 |
 | `Scripts/World/` | 世界骨架、殖民地、相机、放置控制 |
-| `Scripts/Grid/` | 网格、A* 寻路和格子坐标换算 |
-| `Scripts/Building/` | 建筑基类以及三种测试建筑 |
-| `Scripts/Human/` | 居民、移动、外观和 AI |
+| `Scripts/Grid/` | 网格、A* 寻路和坐标换算 |
+| `Scripts/Building/` | 建筑基类、取水站、取食站、工作站、仓库 |
+| `Scripts/Human/` | 居民、移动、外观、AI、状态机和工作行为 |
+| `Scripts/Material/` | 物品、库存、工作类型和工作周期模型 |
 | `Scripts/Buff/` | Buff 系统、基类和具体效果 |
-| `Scripts/Debug/` | 左上角调试面板、放置自检、Buff 自检 |
+| `Scripts/Debug/` | 调试面板、放置自检、Buff 自检和完整验收自检 |
 | `Scripts/UI/` | 建筑详情页 |
 | `Scenes/` | 主场景、测试场景和居民场景 |
 | `Assets/` | 图标与居民序列帧 |
-| `Docs/` | 需求和设计记录 |
+| `Docs/` | 需求、设计和验收记录 |
 
-常调的数值大致在这些地方：
+常用调参位置：
 
-- 一天多少刻、现实时间快慢：`Scripts/Core/TickManager.gd`
-- 居民日耗：`Scripts/Human/Human.gd`
-- 年龄段速度和移动：`Scripts/Human/HumanMotion.gd`
+- 一天刻数、现实走时速度：`Scripts/Core/TickManager.gd`
+- 居民日消耗：`Scripts/Human/Human.gd`
+- 年龄速度、寻路和等待点偏移：`Scripts/Human/HumanMotion.gd`
 - 目标权重和状态转换：`Scripts/Human/HumanAI/`
-- 建筑尺寸、入口和等待刻数：`Scripts/Building/`
-- 世界大小和格子像素：`Scripts/Grid/WorldGridGlobal.gd`、`Scripts/Grid/WorldGrid.gd`
+- 工作需求、产出和周期耗时：`Scripts/Building/WorkStation.gd`
+- 物品体积和显示名：`Scripts/Material/MaterialTypes.gd`
 
 ## 测试
 
-项目还没有单元测试框架，主要靠无头运行测试场景，检查日志里的结果：
+项目没有单元测试框架，以 Godot 无头场景、日志断言和编辑器检查为主。
 
 ```powershell
+# 资源导入和脚本解析
+godot --headless --path . --import
+
+# v0.0.1.4 完整验收，逐项输出 [ACCEPT] PASS/FAIL
+godot --headless --path . --log-file .godot/v014_acceptance.log --scene res://Scenes/TestScene.tscn -- --acceptance
+
 # 常规模拟
-godot --headless --path . Scenes/TestScene.tscn -- --speed=20 --max-ticks=600
+godot --headless --path . --scene res://Scenes/TestScene.tscn -- --speed=20 --max-ticks=600
 
-# 放置、重叠、压住居民后的挤出
-godot --headless --path . Scenes/TestScene.tscn -- --autoplace --speed=20 --max-ticks=60
+# 放置、重叠和挤出
+godot --headless --path . --scene res://Scenes/TestScene.tscn -- --autoplace --speed=20 --max-ticks=60
 
-# 疲劳、眩晕、口渴和自动到期
-godot --headless --path . Scenes/TestScene.tscn -- --bufftest --speed=20 --max-ticks=140
+# Buff 数值、工作闸门和到期
+godot --headless --path . --scene res://Scenes/TestScene.tscn -- --bufftest --speed=20 --max-ticks=140
 ```
 
-这些测试目前通过打印“期望值 / 实际值”来检查，不是真正的断言。进程结束不一定代表通过，
-还要看 `[AUTOPLACE]`、`[BUFF]` 和 `[SIM]` 日志里有没有不符合预期的结果。
+完整验收覆盖 15 个雇佣、7 个班次/等待、16 个工作周期、19 个库存、10 个清算
+和 7 个 UI 契约检查。命令退出码为 0 只代表进程结束，仍需确认
+`[ACCEPT] SUMMARY` 的失败数为 0，并检查 `SCRIPT ERROR`、未预期警告和日志中的不变量。
 
-## 目前没做完
+UI 截图可用：
 
-- “摧毁建筑”按钮已经放进详情页，但 `Building.remove()` 仍是占位实现，建筑拆除和网格恢复都还没做。
-- 工作站只是让居民进去待着，没有产出、班次或库存。
-- 没有存档、材料链、建造消耗和正式胜负条件。
-- 相机、放置和 UI 仍需要开编辑器人工检查，无头测试覆盖不到这些。
+```powershell
+godot --path . --windowed --resolution 800x600 --scene res://Scenes/TestScene.tscn -- --ui-demo=work --speed=20 --max-ticks=20 --shot=ui_work.png
+godot --path . --windowed --resolution 800x600 --scene res://Scenes/TestScene.tscn -- --ui-demo=warehouse --speed=20 --max-ticks=20 --shot=ui_warehouse.png
+```
 
-开发前请再看一下 [AGENTS.md](AGENTS.md)，里面有更完整的代码边界、验证要求和已知陷阱。
+开发前请阅读 [AGENTS.md](AGENTS.md) 中的代码边界、每刻顺序和验证要求。

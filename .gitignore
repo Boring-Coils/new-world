@@ -1,6 +1,7 @@
 # Godot 4+ specific ignores
 .godot/
 .godot_userdata_review/
+.godot_userdata_test/
 /android/
 
 # idea

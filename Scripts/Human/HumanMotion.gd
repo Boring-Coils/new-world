@@ -51,6 +51,9 @@ var path_index: int = 0
 ## 当前路径终点
 var destination_cell: Vector2i = INVALID_CELL
 
+## 最终落点相对目标格中心的偏移，用于等待点等实际位置语义。
+var destination_offset: Vector2 = Vector2.ZERO
+
 ## 个体移动速度偏移，避免所有居民以完全相同的速度行走
 var _random_speed_offset: float = 1.0
 
@@ -109,6 +112,25 @@ func move_to_cell(cell: Vector2i) -> bool:
 	return _start_route(route, false)
 
 
+## 移动到世界坐标附近。只允许最终偏移不超过半格；
+## 寻路仍以格子为单位，HumanMotion 继续是唯一移动实现。
+func move_to_position(world_position: Vector2) -> bool:
+	if not _can_move():
+		return _fail_move()
+	var world := WorldGridGlobal.world
+	var cell := world.world_to_cell(world_position)
+	var center := world.cell_to_world(cell)
+	var offset := world_position - center
+	var half_cell := WorldGrid.CELL_SIZE * 0.5
+	offset.x = clampf(offset.x, -half_cell + 0.01, half_cell - 0.01)
+	offset.y = clampf(offset.y, -half_cell + 0.01, half_cell - 0.01)
+	var route := _find_route_to_cell(cell)
+	if route.is_empty():
+		return _fail_move(cell)
+	route["final_offset"] = offset
+	return _start_route(route, false)
+
+
 ## 找到某一类建筑中，按实际寻路距离最近的一个。
 func find_nearest_building(building_type: GlobalEnum.BuildingType) -> Building:
 	var route := _find_nearest_route_to_type(building_type)
@@ -141,6 +163,20 @@ func get_ticks_to_building(building_type: GlobalEnum.BuildingType) -> int:
 	if route.is_empty():
 		return -1
 
+	return _get_ticks_for_route(route)
+
+
+## 到指定建筑的预计移动刻数。找不到路线返回 -1。
+func get_ticks_to_building_instance(building: Building) -> int:
+	var route := _find_route_to_building(building)
+	if route.is_empty():
+		return -1
+	return _get_ticks_for_route(route)
+
+
+func _get_ticks_for_route(route: Dictionary) -> int:
+	if route.is_empty():
+		return -1
 	var speed_pixels := get_speed_cells_per_tick() * float(WorldGrid.CELL_SIZE)
 	if speed_pixels <= 0.0:
 		return -1
@@ -206,6 +242,8 @@ func on_tick() -> void:
 	var world := WorldGridGlobal.world
 	while step > 0.0 and path_index < path.size():
 		var target_position := world.cell_to_world(path[path_index])
+		if path_index == path.size() - 1:
+			target_position += destination_offset
 		var offset := target_position - human.position
 		var distance := offset.length()
 
@@ -359,12 +397,14 @@ func _start_route(route: Dictionary, relocating: bool) -> bool:
 	var new_path: Array[Vector2i] = route["path"]
 	var exit_cell: Vector2i = route["exit_cell"]
 	var new_destination: Vector2i = route["entrance_cell"]
+	var new_offset: Vector2 = route.get("final_offset", Vector2.ZERO)
 
 	_commit_building_exit(exit_cell)
 
 	path = new_path
 	path_index = 0
 	destination_cell = new_destination
+	destination_offset = new_offset
 	_is_relocating = relocating
 	_set_moving(true)
 	movement_started.emit(destination_cell)
@@ -379,8 +419,8 @@ func _commit_building_exit(exit_cell: Vector2i) -> bool:
 		return false
 
 	var building := human.in_building
-	if building is WorkStation:
-		building.leave(human)
+	if building.has_method("leave"):
+		building.call("leave", human)
 
 	human.position = WorldGridGlobal.world.cell_to_world(exit_cell)
 	human.in_building = null
@@ -405,6 +445,7 @@ func _clear_path() -> void:
 	path.clear()
 	path_index = 0
 	destination_cell = INVALID_CELL
+	destination_offset = Vector2.ZERO
 	_is_relocating = false
 	_set_moving(false)
 
