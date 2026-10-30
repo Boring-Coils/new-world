@@ -52,3 +52,19 @@ static func create_fabrication() -> WorkType:
 			MaterialTypes.ItemType.WIRE: 1,
 		},
 	)
+
+
+static func create_scrap_sorting() -> WorkType:
+	return WorkType.new(
+		&"scrap_sorting",
+		"废料分拣",
+		60,
+		{
+			MaterialTypes.ItemType.WASTE: 6,
+		},
+		{
+			MaterialTypes.ItemType.METAL: 1,
+			MaterialTypes.ItemType.PLASTIC: 1,
+			MaterialTypes.ItemType.WIRE: 1,
+		},
+	)

@@ -256,10 +256,8 @@ func _start_locked() -> bool:
 	cycle.status = WorkCycle.Status.LOCKED
 	cycle.started_tick = TickManager.total_ticks
 	cycle.remaining_ticks = cycle.work_type.duration_ticks
-	if cycle.employer is WorkStation:
-		var station := cycle.employer as WorkStation
-		station.enter(human)
-		human.in_building = station
+	if cycle.employer.enter(human):
+		human.in_building = cycle.employer
 		human.set_world_visibility(false)
 	return true
 
@@ -308,7 +306,6 @@ func _leave_host_building() -> void:
 	if not is_instance_valid(human) or not is_instance_valid(human.in_building):
 		return
 	var host := human.in_building
-	if host is WorkStation:
-		(host as WorkStation).leave(human)
+	host.leave(human)
 	human.in_building = null
 	human.set_world_visibility(true)

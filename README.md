@@ -29,6 +29,7 @@ godot --headless --path . --scene res://Scenes/TestScene.tscn -- --speed=20 --ma
 - 工作周期先锁定需求、预留产出空间并补齐路线，锁定后才开始计时和结算。
 - 眩晕、虚弱、解雇、雇主删除等硬中断会取消周期并归还需求和空间。
 - 物资系统支持废料、金属、塑料、线四种物品，以及数量锁定、容量预留、跨仓拆分和原子结算。
+- 废料分拣站默认执行废料分拣：每周期消耗 6 废料，生产 1 金属、1 塑料、1 线。
 - 独立仓库默认容量 2000，可工作建筑默认自带库存 1000。
 - 建筑和居民退出时会清理雇佣、工作、锁定、预留和库存，不留下悬空引用。
 - 建筑详情页支持目标人数输入，以及库存容量、已用、预留、可用体积和各物品数量。
@@ -65,7 +66,7 @@ godot --headless --path . --scene res://Scenes/TestScene.tscn -- --speed=20 --ma
 | `Scripts/Core/` | 游戏时钟、物资账本和全局服务 |
 | `Scripts/World/` | 世界骨架、殖民地、相机、放置控制 |
 | `Scripts/Grid/` | 网格、A* 寻路和坐标换算 |
-| `Scripts/Building/` | 建筑基类、取水站、取食站、工作站、仓库 |
+| `Scripts/Building/` | 建筑基类、取水站、取食站、废料分拣站、仓库 |
 | `Scripts/Human/` | 居民、移动、外观、AI、状态机和工作行为 |
 | `Scripts/Material/` | 物品、库存、工作类型和工作周期模型 |
 | `Scripts/Buff/` | Buff 系统、基类和具体效果 |
@@ -81,7 +82,7 @@ godot --headless --path . --scene res://Scenes/TestScene.tscn -- --speed=20 --ma
 - 居民日消耗：`Scripts/Human/Human.gd`
 - 年龄速度、寻路和等待点偏移：`Scripts/Human/HumanMotion.gd`
 - 目标权重和状态转换：`Scripts/Human/HumanAI/`
-- 工作需求、产出和周期耗时：`Scripts/Building/WorkStation.gd`
+- 工作需求、产出和周期耗时：`Scripts/Material/WorkType.gd`
 - 物品体积和显示名：`Scripts/Material/MaterialTypes.gd`
 
 ## 测试

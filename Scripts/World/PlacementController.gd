@@ -220,7 +220,7 @@ func _create_building(kind_value: Kind) -> Building:
 		Kind.FOOD:
 			return FoodStation.new()
 		Kind.WORK:
-			return WorkStation.new()
+			return ScrapSortingStation.new()
 		Kind.WAREHOUSE:
 			return Warehouse.new()
 		_:

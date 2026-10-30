@@ -1,13 +1,19 @@
 extends CanvasLayer
 class_name DebugUI
 
-## 调试面板：显示时间 / 居民状态，并提供「放置建筑和居民」的按钮。[br]
-## 只负责界面，真正放东西的是 [PlacementController]。
+## 调试面板：显示时间 / 居民状态，并提供放置和调试补给操作。[br]
+## 真正放东西的是 [PlacementController]；随机补给只修改独立仓库库存。
 
 ## 选中了要放什么（值是 [enum PlacementController.Kind]）
 signal kind_selected(kind: int)
 
-## 状态文字（天、刻、各状态人数）
+## 每次调试补给向随机独立仓库添加的废料数量
+const WAREHOUSE_WASTE_BATCH: int = 100
+
+## 时间文字（第几天、当天第几刻、累计刻数）
+var _time_label: Label
+
+## 居民状态文字（各状态人数）
 var _stats_label: Label
 
 ## 当前放置模式的说明
@@ -22,6 +28,8 @@ var _current_kind: int = PlacementController.Kind.NONE
 
 func _ready() -> void:
 	_build()
+	TickManager.tick_advanced.connect(_on_tick_advanced)
+	_update_time(TickManager.total_ticks, TickManager.get_day(), TickManager.get_tick_of_day())
 
 
 func _build() -> void:
@@ -47,6 +55,11 @@ func _build() -> void:
 	title.add_theme_font_size_override("font_size", 16)
 	vbox.add_child(title)
 
+	_time_label = Label.new()
+	_time_label.add_theme_font_size_override("font_size", 14)
+	_time_label.add_theme_color_override("font_color", Color(0.65, 0.85, 1.0, 1.0))
+	vbox.add_child(_time_label)
+
 	_stats_label = Label.new()
 	_stats_label.add_theme_font_size_override("font_size", 13)
 	_stats_label.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0, 0.9))
@@ -68,10 +81,20 @@ func _build() -> void:
 
 	_add_button(grid, "无限取水站", PlacementController.Kind.WATER)
 	_add_button(grid, "无限取食站", PlacementController.Kind.FOOD)
-	_add_button(grid, "加工工作站", PlacementController.Kind.WORK)
+	_add_button(grid, "废料分拣站", PlacementController.Kind.WORK)
 	_add_button(grid, "仓库", PlacementController.Kind.WAREHOUSE)
 	_add_button(grid, "居民", PlacementController.Kind.HUMAN)
 	_add_button(grid, "取消", PlacementController.Kind.NONE)
+
+	vbox.add_child(HSeparator.new())
+
+	var add_waste_button := Button.new()
+	add_waste_button.text = "随机仓库 +100 废料"
+	add_waste_button.tooltip_text = "向随机独立仓库添加 100 废料"
+	add_waste_button.focus_mode = Control.FOCUS_NONE
+	add_waste_button.custom_minimum_size = Vector2(0, 30)
+	add_waste_button.pressed.connect(_on_add_waste_pressed)
+	vbox.add_child(add_waste_button)
 
 	_hint_label = Label.new()
 	_hint_label.text = "左键放下（可连续放）\n右键 / ESC 取消"
@@ -107,7 +130,7 @@ func _on_button(kind: int) -> void:
 		PlacementController.Kind.FOOD:
 			_mode_label.text = "放置：无限取食站"
 		PlacementController.Kind.WORK:
-			_mode_label.text = "放置：加工工作站"
+			_mode_label.text = "放置：废料分拣站"
 		PlacementController.Kind.WAREHOUSE:
 			_mode_label.text = "放置：仓库"
 		PlacementController.Kind.HUMAN:
@@ -115,6 +138,41 @@ func _on_button(kind: int) -> void:
 		_:
 			_mode_label.text = "放置：无"
 	kind_selected.emit(kind)
+
+
+func _on_add_waste_pressed() -> void:
+	var items := {MaterialTypes.ItemType.WASTE: WAREHOUSE_WASTE_BATCH}
+	var candidates: Array[Building] = []
+	for building in TickManager.get_buildings_of_type(GlobalEnum.BuildingType.WAREHOUSE):
+		if (
+			is_instance_valid(building)
+			and building.is_placed
+			and building.inventory != null
+			and building.inventory.can_add_items(items)
+		):
+			candidates.append(building)
+
+	if candidates.is_empty():
+		set_hint("没有可容纳 %d 废料的独立仓库" % WAREHOUSE_WASTE_BATCH)
+		return
+
+	var target := candidates[randi_range(0, candidates.size() - 1)]
+	if target.try_deposit_items(items):
+		set_hint("已向随机仓库添加废料 +%d" % WAREHOUSE_WASTE_BATCH)
+	else:
+		set_hint("废料添加失败：仓库空间不足")
+
+
+func _on_tick_advanced(total_ticks: int, day: int, tick_of_day: int) -> void:
+	_update_time(total_ticks, day, tick_of_day)
+
+
+func _update_time(total_ticks: int, day: int, tick_of_day: int) -> void:
+	if _time_label == null:
+		return
+	_time_label.text = "时间：第 %d 天 · 第 %d 刻\n累计：%d 刻" % [
+		day, tick_of_day, total_ticks
+	]
 
 
 ## 更新左上角的状态文字

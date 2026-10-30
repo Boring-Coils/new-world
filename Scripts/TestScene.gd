@@ -1,7 +1,7 @@
 extends World
 
 ## 测试场景：在 [World] 的空世界（相机 + 网格）之上，摆一个取水站、一个取食站、[br]
-## 一个工作站，再放一群人，用来验证网格寻路、每刻消耗、补水补食和上班进站这一整套循环。[br]
+## 一个废料分拣站，再放一群人，用来验证网格寻路、每刻消耗、补水补食和上班进站这一整套循环。[br]
 ## [b]只有调试用的东西[/b]（统计面板、自动放置断言、buff 自检）允许留在这里；[br]
 ## 真正的游戏规则请放 Colony 那一层。
 
@@ -49,7 +49,7 @@ var _acceptance: bool = false
 var _ui_demo: String = ""
 
 ## 集成场景中的核心建筑，验收自检和调试统计会读取它们。
-var work_station: WorkStation = null
+var scrap_sorting_station: ScrapSortingStation = null
 var warehouse: Warehouse = null
 
 
@@ -101,13 +101,13 @@ func _setup_buildings() -> void:
 	if not food.place_at(world, FOOD_ORIGIN):
 		push_error("%s 放不下" % food.display_name)
 
-	work_station = WorkStation.new()
-	work_station.name = work_station.display_name
-	add_child(work_station)
-	if not work_station.place_at(world, WORK_ORIGIN):
-		push_error("%s 放不下" % work_station.display_name)
+	scrap_sorting_station = ScrapSortingStation.new()
+	scrap_sorting_station.name = scrap_sorting_station.display_name
+	add_child(scrap_sorting_station)
+	if not scrap_sorting_station.place_at(world, WORK_ORIGIN):
+		push_error("%s 放不下" % scrap_sorting_station.display_name)
 	else:
-		work_station.inventory.add_items_unchecked({
+		scrap_sorting_station.inventory.add_items_unchecked({
 			MaterialTypes.ItemType.METAL: 30,
 			MaterialTypes.ItemType.PLASTIC: 30,
 		})
@@ -209,7 +209,7 @@ func _open_ui_demo() -> void:
 		"warehouse":
 			panel.show_building(warehouse)
 		_:
-			panel.show_building(work_station)
+			panel.show_building(scrap_sorting_station)
 	_placer.select_kind(PlacementController.Kind.WAREHOUSE)
 	_placer.debug_hover_cell = Vector2i(490, 510)
 
@@ -314,8 +314,6 @@ func _process(_delta: float) -> void:
 	if _debug_ui == null:
 		return
 
-	var day := TickManager.get_day()
-	var tick := TickManager.get_tick_of_day()
 	var at_water := 0
 	var at_food := 0
 	var going_work := 0
@@ -345,8 +343,8 @@ func _process(_delta: float) -> void:
 					_:
 						idle += 1
 
-	_debug_ui.set_stats("第 %d 天 第 %d 刻\n取水 %d   取食 %d\n上班路上 %d   站内 %d\n脱困 %d   空闲 %d" % [
-		day, tick, at_water, at_food, going_work, inside_work, relocating, idle
+	_debug_ui.set_stats("取水 %d   取食 %d\n上班路上 %d   站内 %d\n脱困 %d   空闲 %d" % [
+		at_water, at_food, going_work, inside_work, relocating, idle
 	])
 
 	# 调试模式：定期打印一份，跑满 _max_ticks 刻就退出

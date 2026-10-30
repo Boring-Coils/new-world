@@ -43,6 +43,9 @@ var is_placed: bool = false
 ## 预览状态下当前格子能不能放，决定描边是绿还是红
 var preview_valid: bool = true
 
+## 建筑等级（默认 1）
+var level: int = 1
+
 
 ## 点一下建筑时发出（预览用的虚影不发）[br]
 ## 谁需要「选中建筑」就接这个信号，建筑本身不认识详情页。
@@ -149,6 +152,16 @@ func on_tick() -> void:
 ## 居民到达出入口后要在这个建筑里等几刻。基类返回 0，子类覆盖。
 func get_wait_ticks() -> int:
 	return 0
+
+
+## 尝试让居民进入工作建筑内部。返回是否实际进入并占用站内位置。
+func enter(_human: Human) -> bool:
+	return false
+
+
+## 居民离开工作建筑内部时调用。需要维护站内名单的建筑在这里清理。
+func leave(_human: Human) -> void:
+	pass
 
 
 # ---------------------------------------------------------------------------
@@ -427,11 +440,10 @@ func _on_body_pressed() -> void:
 ## 调不调 [code]super.build_detail()[/code] 都不会把自己的内容清掉。
 func build_detail() -> void:
 	add_section("status", "状态")
-	add_row("status", "建筑类型", GlobalEnum.BuildingType.keys()[building_type])
 
 	if is_hireable:
 		add_section("employment", "雇佣")
-		add_row("employment", "当前雇员", "%d / %d" % [employees.size(), max_workers])
+		add_row("employment", "实际工人数量", "%d / %d" % [employees.size(), max_workers])
 		add_number_input(
 			"employment",
 			"目标人数",
@@ -448,14 +460,17 @@ func build_detail() -> void:
 		)
 
 	if inventory != null:
-		add_section("inventory", "库存")
-		add_row("inventory", "容量", "%d" % inventory.capacity)
-		add_row("inventory", "已用体积", "%d" % inventory.get_used_volume())
-		add_row("inventory", "已预留体积", "%d" % inventory.reserved_volume)
-		add_row("inventory", "可用体积", "%d" % inventory.get_available_volume())
+		add_section("inventoryTotal", "库存总览")
+		add_row("inventoryTotal", "容量", "%d" % inventory.capacity)
+		add_row("inventoryTotal", "已用体积", "%d" % inventory.get_used_volume())
+		add_row("inventoryTotal", "已预留体积", "%d" % inventory.reserved_volume)
+
+		add_section("inventoryDetail", "库存详情")
 		for item_type in MaterialTypes.get_item_types():
+			if inventory.get_item_count(item_type) == 0 and inventory.get_locked_quantity(item_type) == 0:
+				continue
 			add_row(
-				"inventory",
+				"inventoryDetail",
 				MaterialTypes.get_display_name(item_type),
 				"%d（锁定 %d）" % [
 					inventory.get_item_count(item_type),

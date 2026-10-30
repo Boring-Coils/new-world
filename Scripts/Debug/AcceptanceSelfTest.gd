@@ -851,6 +851,67 @@ func _test_work_cycles() -> void:
 		"required=%d" % predict_type.get_required_supply_ticks(),
 	)
 
+	var scrap_type := WorkType.create_scrap_sorting()
+	var default_station := ScrapSortingStation.new()
+	var scrap_contract_ok := (
+		scrap_type.id == &"scrap_sorting"
+		and scrap_type.display_name == "废料分拣"
+		and scrap_type.duration_ticks == 60
+		and scrap_type.demand == {MaterialTypes.ItemType.WASTE: 6}
+		and scrap_type.output == {
+			MaterialTypes.ItemType.METAL: 1,
+			MaterialTypes.ItemType.PLASTIC: 1,
+			MaterialTypes.ItemType.WIRE: 1,
+		}
+		and default_station.work_type != null
+		and default_station.work_type.id == &"scrap_sorting"
+	)
+	default_station.free()
+	_check(
+		"CYCLE-17",
+		scrap_contract_ok,
+		"废料分拣消耗 6 废料并产出金属/塑料/线各 1",
+		"type=%s duration=%d" % [scrap_type.display_name, scrap_type.duration_ticks],
+	)
+
+	origin = _next_origin()
+	station = _create_workstation(
+		origin,
+		{},
+		{},
+		scrap_type.duration_ticks,
+		1,
+	)
+	station.work_type = WorkType.create_scrap_sorting()
+	station.inventory.add_items_unchecked({MaterialTypes.ItemType.WASTE: 6})
+	worker = _spawn_human(origin + Vector2i(2, 5), GlobalEnum.AgeStatus.ADULT, 30)
+	station.hire_employee(worker)
+	behavior = worker.ai.get_work_behavior()
+	started = behavior.begin(station)
+	for _tick_index in range(scrap_type.duration_ticks):
+		behavior.tick()
+	var scrap_cycle_ok := (
+		started
+		and station.work_result_count == 1
+		and station.inventory.get_item_count(MaterialTypes.ItemType.WASTE) == 0
+		and station.inventory.get_item_count(MaterialTypes.ItemType.METAL) == 1
+		and station.inventory.get_item_count(MaterialTypes.ItemType.PLASTIC) == 1
+		and station.inventory.get_item_count(MaterialTypes.ItemType.WIRE) == 1
+	)
+	_check(
+		"CYCLE-18",
+		scrap_cycle_ok,
+		"废料分拣周期按配方完成一次结算",
+		"waste=%d metal=%d plastic=%d wire=%d results=%d" % [
+			station.inventory.get_item_count(MaterialTypes.ItemType.WASTE),
+			station.inventory.get_item_count(MaterialTypes.ItemType.METAL),
+			station.inventory.get_item_count(MaterialTypes.ItemType.PLASTIC),
+			station.inventory.get_item_count(MaterialTypes.ItemType.WIRE),
+			station.work_result_count,
+		],
+	)
+	await _dispose_tracked()
+
 
 func _test_inventory() -> void:
 	var inventory := _create_virtual_inventory(10, Vector2i(20, 20), false)
@@ -1523,8 +1584,10 @@ func _test_cleanup() -> void:
 
 
 func _test_ui_contract() -> void:
-	var work_station: WorkStation = get_parent().get("work_station") as WorkStation
-	var workstation_sections: Array[Dictionary] = work_station.get_detail_sections()
+	var scrap_sorting_station: Building = get_parent().get(
+		"scrap_sorting_station"
+	) as Building
+	var workstation_sections: Array[Dictionary] = scrap_sorting_station.get_detail_sections()
 	var employment_section := _find_section(workstation_sections, "employment")
 	var target_row := _find_row(employment_section, "target_workers")
 	_check(
@@ -1566,7 +1629,7 @@ func _test_ui_contract() -> void:
 	)
 
 	var panel := get_parent().get_node_or_null("BuildingDetailPanel") as BuildingDetailPanel
-	panel.show_building(get_parent().get("work_station"))
+	panel.show_building(scrap_sorting_station)
 	await get_tree().process_frame
 	var spin := _find_first_spinbox(panel)
 	var focus_ok := false
@@ -1636,7 +1699,7 @@ func _test_ui_contract() -> void:
 	)
 
 	var target_value_applied := false
-	var parent_station := get_parent().get("work_station") as WorkStation
+	var parent_station := get_parent().get("scrap_sorting_station") as Building
 	var original_target := parent_station.target_workers
 	if not target_row.is_empty():
 		var callback: Callable = target_row["on_changed"]
@@ -1655,7 +1718,9 @@ func _test_integration() -> void:
 	TickManager.auto_run = false
 	for _i in range(1800):
 		TickManager.advance_tick()
-	var integration_station: WorkStation = get_parent().get("work_station") as WorkStation
+	var integration_station: Building = get_parent().get(
+		"scrap_sorting_station"
+	) as Building
 	var work_results: int = (
 		integration_station.work_result_count
 		if integration_station != null
@@ -1689,8 +1754,8 @@ func _create_workstation(
 	output: Dictionary,
 	duration: int = 1,
 	target: int = 1,
-) -> WorkStation:
-	var station := WorkStation.new()
+) -> Building:
+	var station := ScrapSortingStation.new()
 	station.work_type = WorkType.new(
 		StringName("test_%d" % _fixture_index),
 		"测试工作",

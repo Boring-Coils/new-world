@@ -419,8 +419,7 @@ func _commit_building_exit(exit_cell: Vector2i) -> bool:
 		return false
 
 	var building := human.in_building
-	if building.has_method("leave"):
-		building.call("leave", human)
+	building.leave(human)
 
 	human.position = WorldGridGlobal.world.cell_to_world(exit_cell)
 	human.in_building = null
