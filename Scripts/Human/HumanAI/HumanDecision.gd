@@ -13,7 +13,8 @@ const URGENT_GAME_SECONDS: float = 36.0 * 60.0
 const WORK_INTERRUPT_MARGIN: float = 1.15
 
 
-## 按生存紧迫度和工作权重返回从高到低排序的目标数组。
+## 按生存紧迫度和工作权重返回从高到低排序的目标数组。[br]
+## [param context] 是当前决策刻的居民状态快照。
 static func rank_goals(context: HumanAIContext) -> Array[int]:
 	var urgent_ticks := URGENT_GAME_SECONDS / TickManager.GAME_SECONDS_PER_TICK
 	var scale := urgent_ticks * WORK_WEIGHT
@@ -63,6 +64,7 @@ static func rank_goals(context: HumanAIContext) -> Array[int]:
 
 
 ## 判断 [param goal] 是否已超过当前工作评分，足以请求立即中断工作。[br]
+## [param context] 是当前决策刻的居民状态快照。[br]
 ## 只支持取水和取食目标；其他目标始终返回 [code]false[/code]。
 static func should_interrupt_work_for_goal(
 	context: HumanAIContext,

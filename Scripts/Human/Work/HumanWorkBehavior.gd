@@ -41,7 +41,9 @@ var _source_inventories: Array[Inventory] = []
 var _source_index: int = 0
 
 
-## 绑定居民、AI 控制器并缓存移动组件。
+## 绑定居民、AI 控制器并缓存移动组件。[br]
+## [param host] 是执行工作事务的居民。[br]
+## [param controller] 是拥有该事务并负责决策的居民 AI。
 func bind(host: Human, controller: HumanAI) -> void:
 	human = host
 	ai = controller
@@ -49,7 +51,8 @@ func bind(host: Human, controller: HumanAI) -> void:
 
 
 ## 尝试为 [param employer] 创建并启动一次工作周期。[br]
-## 会校验雇佣、班次和工作类型，锁定需求与产出空间，再选择站内开工或跨仓库取料路线。
+## 会校验雇佣、班次和工作类型，锁定需求与产出空间，再选择站内开工或跨仓库取料路线。[br]
+## 返回工作周期是否成功创建并进入执行阶段。
 func begin(employer: Building) -> bool:
 	if cycle != null and not cycle.is_finished():
 		return false
@@ -214,7 +217,8 @@ func get_debug_snapshot() -> Dictionary:
 	}
 
 
-## 验证 [param employer] 仍是有效、已放置且与本居民保持雇佣关系的工作站。
+## 验证 [param employer] 仍是有效、已放置且与本居民保持雇佣关系的工作站。[br]
+## 返回该建筑是否仍可作为当前工作周期的雇主。
 func _validate_employer(employer: Building) -> bool:
 	return (
 		is_instance_valid(employer)
@@ -280,7 +284,8 @@ func _take_locks_at(inventory: Inventory) -> void:
 			MaterialSystem.take_locked(lock_id)
 
 
-## 完成全部前置校验后进入锁定阶段并尝试进入工作站内部。
+## 完成全部前置校验后进入锁定阶段并尝试进入工作站内部。[br]
+## 返回工作是否成功进入锁定阶段。
 func _start_locked() -> bool:
 	if cycle == null or not _validate_employer(cycle.employer):
 		cancel("雇主已失效")
@@ -303,7 +308,8 @@ func _start_locked() -> bool:
 
 
 ## 验证锁定周期仍满足雇佣、需求锁和产出预留要求。[br]
-## 产出预留失效时会尝试用当前可达仓库补足。
+## 产出预留失效时会尝试用当前可达仓库补足。[br]
+## 返回周期是否仍满足继续工作的全部条件。
 func _validate_locked_cycle() -> bool:
 	if cycle == null or not _validate_employer(cycle.employer):
 		return false
@@ -320,7 +326,8 @@ func _validate_locked_cycle() -> bool:
 	return true
 
 
-## 尝试原子结算工作周期；空间或锁失效时进入待结算阶段。
+## 尝试原子结算工作周期；空间或锁失效时进入待结算阶段。[br]
+## 返回工作状态的稳定结果名：完成时返回 [code]&"completed"[/code]，其他情况返回空字符串。
 func _settle() -> StringName:
 	if not MaterialSystem.settle_cycle(cycle):
 		phase = Phase.PENDING_SETTLEMENT

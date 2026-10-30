@@ -13,7 +13,8 @@ func apply(_params: Dictionary) -> void:
 	duration = TickManager.TICKS_PER_DAY * 10
 
 
-## 重复添加时不叠加层数、不刷新持续时间和恢复计时。
+## 重复添加时不叠加层数、不刷新持续时间和恢复计时。[br]
+## [param params] 是重复添加传入的配置；当前实现有意忽略它。
 func reapply(params: Dictionary) -> void:
 	pass
 
@@ -29,10 +30,12 @@ func on_remove() -> void:
 	if heal_time > 0:
 		human.die()
 
-## 虚弱期间始终禁止工作。
+## 虚弱期间始终禁止工作。[br]
+## 返回 [code]false[/code] 表示工作闸门关闭。
 func can_work() -> bool:
 	return false
 
-## 虚弱状态下的水和食物消耗倍率，降低为正常速度的一半。
+## 虚弱状态下的水和食物消耗倍率，降低为正常速度的一半。[br]
+## 返回当前虚弱效果对应的消耗倍率。
 func get_consume_multiplier() -> float:
 	return 0.5

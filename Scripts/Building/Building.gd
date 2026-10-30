@@ -149,12 +149,14 @@ func get_wait_ticks() -> int:
 	return 0
 
 
-## 尝试让居民进入工作建筑内部。返回是否实际进入并占用站内位置。
+## 尝试让居民进入工作建筑内部。返回是否实际进入并占用站内位置。[br]
+## [param _human] 是请求进入建筑的居民；基类不维护站内名单，因此忽略该参数。
 func enter(_human: Human) -> bool:
 	return false
 
 
-## 居民离开工作建筑内部时调用。需要维护站内名单的建筑在这里清理。
+## 居民离开工作建筑内部时调用。需要维护站内名单的建筑在这里清理。[br]
+## [param _human] 是正在离开建筑的居民；基类不维护站内名单，因此忽略该参数。
 func leave(_human: Human) -> void:
 	pass
 
@@ -163,12 +165,15 @@ func leave(_human: Human) -> void:
 # 占地 / 出入口
 # ---------------------------------------------------------------------------
 
-## 建筑本体占的所有格子（绝对坐标）
+## 建筑本体占的所有格子（绝对坐标）[br]
+## 返回当前建筑本体覆盖的全部格子坐标。
 func get_occupied_cells() -> Array[Vector2i]:
 	return _get_occupied_cells_at(origin_cell)
 
 
-## 按指定左上角算出建筑本体会占用的所有格子（不修改状态）。
+## 按指定左上角算出建筑本体会占用的所有格子（不修改状态）。[br]
+## [param origin] 是候选建筑左上角格子。[br]
+## 返回该左上角对应的全部占格坐标。
 func _get_occupied_cells_at(origin: Vector2i) -> Array[Vector2i]:
 	var cells: Array[Vector2i] = []
 	for x in range(origin.x, origin.x + size_cells.x):
@@ -177,7 +182,9 @@ func _get_occupied_cells_at(origin: Vector2i) -> Array[Vector2i]:
 	return cells
 
 
-## 候选建筑的占格是否压住了任何已有建筑的出入口。
+## 候选建筑的占格是否压住了任何已有建筑的出入口。[br]
+## [param footprint] 是候选建筑占格组成的查找字典。[br]
+## 返回候选占格是否与任一已有建筑出入口重叠。
 func _overlaps_existing_entrance(footprint: Dictionary) -> bool:
 	for other in TickManager.buildings:
 		if not is_instance_valid(other) or other == self:
@@ -188,7 +195,8 @@ func _overlaps_existing_entrance(footprint: Dictionary) -> bool:
 	return false
 
 
-## 所有出入口的格子坐标（绝对坐标）
+## 所有出入口的格子坐标（绝对坐标）[br]
+## 返回当前建筑全部出入口的绝对格子坐标。
 func get_entrance_cells() -> Array[Vector2i]:
 	var cells: Array[Vector2i] = []
 	for offset in entrance_offsets:
@@ -196,7 +204,8 @@ func get_entrance_cells() -> Array[Vector2i]:
 	return cells
 
 
-## 出入口格子的世界坐标（格子中心）
+## 出入口格子的世界坐标（格子中心）[br]
+## 返回当前建筑全部出入口对应的世界像素坐标。
 func get_entrance_positions() -> Array[Vector2]:
 	var positions: Array[Vector2] = []
 	for cell in get_entrance_cells():
@@ -221,7 +230,9 @@ func get_nearest_entrance_cell(from_cell: Vector2i) -> Vector2i:
 	return best
 
 
-## 判断这一格是不是本建筑的出入口
+## 判断这一格是不是本建筑的出入口[br]
+## [param cell] 是要检查的绝对格子坐标。[br]
+## 返回该格是否属于当前建筑的出入口。
 func is_entrance_cell(cell: Vector2i) -> bool:
 	return get_entrance_cells().has(cell)
 
@@ -231,8 +242,10 @@ func is_entrance_cell(cell: Vector2i) -> bool:
 # ---------------------------------------------------------------------------
 
 ## 判断能不能放在 [param origin] 这个格子。不会修改任何状态。[br]
+## [param world] 是用于边界和通行校验的世界网格。[br]
 ## 检查项：矩形在界内、本体内每格都是空的（没被别的建筑或遮挡物占）、[br]
-## 本体不覆盖已有建筑的出入口，且每个自己的出入口在界内、是空地并与建筑边相邻。
+## 本体不覆盖已有建筑的出入口，且每个自己的出入口在界内、是空地并与建筑边相邻。[br]
+## 返回该位置是否允许放置当前建筑。
 func can_place_at(world: WorldGrid, origin: Vector2i) -> bool:
 	if size_cells.x <= 0 or size_cells.y <= 0:
 		return false
@@ -272,6 +285,7 @@ func can_place_at(world: WorldGrid, origin: Vector2i) -> bool:
 
 
 ## 把建筑放到 [param origin] 这一格上。成功返回 [code]true[/code]。[br]
+## [param world] 是用于占格和放置校验的世界网格。[br]
 ## 放好之后，建筑本体占的格子会被设成不可走，出入口保持可走。[br]
 ## 只有放置成功后才登记到 [TickManager]。
 func place_at(world: WorldGrid, origin: Vector2i) -> bool:
@@ -373,7 +387,9 @@ func _build_visuals() -> void:
 	_apply_preview_style()
 
 
-## 生成一份主体样式：纯色底 + 深色描边
+## 生成一份主体样式：纯色底 + 深色描边[br]
+## [param bg] 是按钮背景色，描边和圆角使用统一建筑样式。[br]
+## 返回配置完成的按钮样式资源。
 func _make_body_style(bg: Color) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
 	style.bg_color = bg
@@ -405,7 +421,8 @@ func _update_preview_outline() -> void:
 	_body_button.add_theme_stylebox_override("pressed", style)
 
 
-## 由 [PlacementController] 每帧调用，告诉预览「这一格现在能不能放」
+## 由 [PlacementController] 每帧调用，告诉预览「这一格现在能不能放」[br]
+## [param valid] 表示当前预览位置是否通过放置校验。
 func set_preview_valid(valid: bool) -> void:
 	if preview_valid == valid:
 		return
@@ -414,6 +431,7 @@ func set_preview_valid(valid: bool) -> void:
 
 
 ## 开关这栋建筑的点选。[br]
+## [param enabled] 为 [code]true[/code] 时允许点击，为 [code]false[/code] 时让点击穿透给放置控制器。[br]
 ## 放置模式下必须关掉：Body 是 Button，会把左键点击吃掉，[br]
 ## 结果就是「想在这一格放东西」变成「点开了这栋建筑的详情页」，放置也失败。
 func set_click_enabled(enabled: bool) -> void:
@@ -479,19 +497,25 @@ func build_detail() -> void:
 
 
 ## 给外面（详情页）取一份当前内容。[br]
-## 每次调用都重建一遍（建筑数据每刻在变，缓存反而要处理失效），清空动作在这里做。
+## 每次调用都重建一遍（建筑数据每刻在变，缓存反而要处理失效），清空动作在这里做。[br]
+## 返回当前建筑可见板块和行数据的数组。
 func get_detail_sections() -> Array[Dictionary]:
 	_detail_sections.clear()
 	build_detail()
 	return _detail_sections
 
 
-## 加一个板块（板块 id 自己定，用来往里面加行 / 隐藏）
+## 加一个板块（板块 id 自己定，用来往里面加行 / 隐藏）[br]
+## [param id] 是后续添加行或隐藏板块使用的唯一标识。[br]
+## [param title] 是详情页显示的板块标题。
 func add_section(id: String, title: String) -> void:
 	_detail_sections.append({"id": id, "title": title, "hidden": false, "rows": []})
 
 
-## 往某个板块里加一行。[param key] 是给 [method hide_row] 用的标识，不填就用 label。
+## 往某个板块里加一行。[param key] 是给 [method hide_row] 用的标识，不填就用 label。[br]
+## [param section_id] 是目标板块标识。[br]
+## [param label] 是行左侧显示文字。[br]
+## [param value] 是行右侧显示文本。
 func add_row(section_id: String, label: String, value: String, key: String = "") -> void:
 	for section in _detail_sections:
 		if section["id"] == section_id:
@@ -506,7 +530,14 @@ func add_row(section_id: String, label: String, value: String, key: String = "")
 	push_warning("add_row：没有 %s 这个板块" % section_id)
 
 
-## 添加一行通用数字输入控件。UI 不识别具体建筑，只读取范围、当前值和写入回调。
+## 添加一行通用数字输入控件。UI 不识别具体建筑，只读取范围、当前值和写入回调。[br]
+## [param section_id] 是目标板块标识。[br]
+## [param label] 是输入行左侧显示文字。[br]
+## [param key] 是输入行稳定标识，用于原位刷新。[br]
+## [param minimum] 是允许输入的最小值。[br]
+## [param maximum] 是允许输入的最大值。[br]
+## [param value] 是控件初始值。[br]
+## [param on_changed] 是数值变化时调用的回调。
 func add_number_input(
 	section_id: String,
 	label: String,
@@ -534,14 +565,17 @@ func add_number_input(
 	push_warning("add_number_input：没有 %s 这个板块" % section_id)
 
 
-## 整个板块不显示
+## 整个板块不显示[br]
+## [param id] 是要隐藏的板块标识。
 func hide_section(id: String) -> void:
 	for section in _detail_sections:
 		if section["id"] == id:
 			section["hidden"] = true
 
 
-## 某一行不显示（板块里其它行照常）
+## 某一行不显示（板块里其它行照常）[br]
+## [param section_id] 是行所在板块标识。[br]
+## [param key] 是要隐藏行的稳定标识。
 func hide_row(section_id: String, key: String) -> void:
 	for section in _detail_sections:
 		if section["id"] != section_id:
@@ -555,12 +589,16 @@ func hide_row(section_id: String, key: String) -> void:
 # 内部工具
 # ---------------------------------------------------------------------------
 
-## 切比雪夫距离（八方向步子数），用来比较「哪个出入口更近」
+## 切比雪夫距离（八方向步子数），用来比较「哪个出入口更近」[br]
+## [param a] 是第一个格子坐标。[br]
+## [param b] 是第二个格子坐标。[br]
+## 返回两点在八方向移动下的步数距离。
 func _chebyshev(a: Vector2i, b: Vector2i) -> int:
 	return maxi(absi(a.x - b.x), absi(a.y - b.y))
 
 
-## [param cell] 是否和矩形 [param rect] 边相邻（四邻域，不含斜角）
+## [param cell] 是否和矩形 [param rect] 边相邻（四邻域，不含斜角）[br]
+## 返回该格是否位于矩形四边之外且直接相邻。
 func _is_edge_adjacent(cell: Vector2i, rect: Rect2i) -> bool:
 	return (
 		rect.has_point(cell + Vector2i.LEFT)
@@ -591,7 +629,8 @@ func _ensure_inventory() -> void:
 		inventory.capacity = inventory_capacity
 
 
-## 判断 [param human] 是否可被本建筑新雇佣。
+## 判断 [param human] 是否可被本建筑新雇佣。[br]
+## 返回居民是否满足建筑状态、归属和年龄资格。
 func can_accept_employee(human: Human) -> bool:
 	if not is_hireable or not is_placed:
 		return false
@@ -613,7 +652,8 @@ func get_recruitable_candidate_count() -> int:
 	return count
 
 
-## 判断 [param human] 是否仍满足继续雇佣的资格条件。
+## 判断 [param human] 是否仍满足继续雇佣的资格条件。[br]
+## 返回该居民是否可以继续保留在本建筑雇员名单中。
 func is_employee_eligible(human: Human) -> bool:
 	if not is_instance_valid(human) or not human.is_inside_tree():
 		return false
@@ -624,7 +664,8 @@ func is_employee_eligible(human: Human) -> bool:
 	return can_accept_age(human)
 
 
-## 判断 [param human] 的年龄阶段是否被本建筑允许雇佣。
+## 判断 [param human] 的年龄阶段是否被本建筑允许雇佣。[br]
+## 返回该年龄阶段是否通过本建筑的雇佣年龄规则。
 func can_accept_age(human: Human) -> bool:
 	if not is_instance_valid(human):
 		return false
@@ -637,7 +678,8 @@ func can_accept_age(human: Human) -> bool:
 			return true
 
 
-## 尝试雇佣 [param human]，同步双方关系并发出 [signal employment_changed]。
+## 尝试雇佣 [param human]，同步双方关系并发出 [signal employment_changed]。[br]
+## 返回雇佣是否成功；失败时不会修改雇员名单和居民雇主引用。
 func hire_employee(human: Human) -> bool:
 	if not can_accept_employee(human):
 		return false
@@ -648,7 +690,8 @@ func hire_employee(human: Human) -> bool:
 
 
 ## 解除与 [param human] 的雇佣关系，并通知居民结束相关工作。[br]
-## [param reason] 会传递给居民的雇佣结束处理。
+## [param reason] 会传递给居民的雇佣结束处理。[br]
+## 返回是否确实移除了一个现有雇员。
 func dismiss_employee(human: Human, reason: String = "雇佣结束") -> bool:
 	if not employees.has(human):
 		return false
@@ -659,7 +702,8 @@ func dismiss_employee(human: Human, reason: String = "雇佣结束") -> bool:
 	return true
 
 
-## 设置目标工人数并请求 UI 刷新；实际调整在下一建筑刻执行。
+## 设置目标工人数并请求 UI 刷新；实际调整在下一建筑刻执行。[br]
+## [param value] 是新的目标人数，会被夹到 0 与 [member max_workers] 之间。
 func set_target_workers(value: int) -> void:
 	target_workers = value
 	employment_changed.emit(self)
@@ -671,7 +715,8 @@ func get_employee_count() -> int:
 
 
 ## 判断 [param tick_of_day] 是否处于工作时间。[br]
-## 参数为负时使用当前游戏日刻；当前班次覆盖一天的后三分之二。
+## 参数为负时使用当前游戏日刻；当前班次覆盖一天的后三分之二。[br]
+## 返回指定日内刻是否处于当前建筑的上班时段。
 func is_work_time(tick_of_day: int = -1) -> bool:
 	var tick := TickManager.get_tick_of_day() if tick_of_day < 0 else tick_of_day
 	@warning_ignore("integer_division")
@@ -681,7 +726,9 @@ func is_work_time(tick_of_day: int = -1) -> bool:
 	return tick >= start_tick and tick < end_tick
 
 
-## 接收一次成功工作结果，保存副本、累计次数并发出结算信号。
+## 接收一次成功工作结果，保存副本、累计次数并发出结算信号。[br]
+## [param result] 是包含雇主、周期、需求和产出等字段的结算结果。[br]
+## 返回建筑是否接受并记录了该结果。
 func accept_work_result(result: Dictionary) -> bool:
 	if not is_placed or result.is_empty():
 		return false
@@ -691,7 +738,10 @@ func accept_work_result(result: Dictionary) -> bool:
 	return true
 
 
-## 普通存入。仓库接受任何合法物品；自带库存只接受本建筑自己的产出。
+## 普通存入。仓库接受任何合法物品；自带库存只接受本建筑自己的产出。[br]
+## [param items_to_add] 是要存入的物资类型与数量。[br]
+## [param producer] 是产出该批物资的建筑，用于判断自带库存是否允许存入。[br]
+## 返回物资是否完整写入库存。
 func try_deposit_items(
 	items_to_add: Dictionary,
 	producer: Building = null,
@@ -704,7 +754,11 @@ func try_deposit_items(
 	return inventory.add_items_unchecked(items_to_add)
 
 
-## 任何居民都可以取用未锁定物品；被锁定数量会由 MaterialSystem 排除。
+## 任何居民都可以取用未锁定物品；被锁定数量会由 MaterialSystem 排除。[br]
+## [param item_type] 是要取用的物资类型。[br]
+## [param quantity] 是要取走的物品数量。[br]
+## [param holder] 是发起取用的居民或系统标识。[br]
+## 返回账本是否成功完成本次取用。
 func try_withdraw_items(
 	item_type: int,
 	quantity: int,

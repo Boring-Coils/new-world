@@ -174,7 +174,9 @@ func _setup_humans() -> void:
 	print("[SPAWN] %d 个居民放在 %d 个不同格子上" % [TickManager.humans.size(), used_cells.size()])
 
 
-## 在出生范围里随机挑一格还没被占用的
+## 在出生范围里随机挑一格还没被占用的[br]
+## [param used_cells] 是本次生成过程中已经被占用的格子列表。[br]
+## 返回未使用的出生格；尝试次数耗尽时返回 [code](-1, -1)[/code]。
 func _pick_free_cell(used_cells: Array[Vector2i]) -> Vector2i:
 	for attempt in range(300):
 		var cell := Vector2i(
@@ -323,12 +325,14 @@ func _setup_placement() -> void:
 	add_child(_placer)
 
 
-## 把调试 UI 的建造选择转发给放置控制器。
+## 把调试 UI 的建造选择转发给放置控制器。[br]
+## [param kind] 是 [enum PlacementController.Kind] 中的放置类型。
 func _on_kind_selected(kind: int) -> void:
 	_placer.select_kind(kind)
 
 
-## 每帧刷新居民状态统计，处理截图、周期日志和自动退出。
+## 每帧刷新居民状态统计，处理截图、周期日志和自动退出。[br]
+## [param _delta] 是当前帧间隔；统计按模拟刻读取，因此本方法不使用该值。
 func _process(_delta: float) -> void:
 	if _debug_ui == null:
 		return

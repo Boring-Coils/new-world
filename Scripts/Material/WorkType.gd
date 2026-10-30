@@ -56,7 +56,8 @@ func get_required_supply_ticks(path_ticks: int = 0) -> int:
 	return (total_ticks * 110 + 99) / 100
 
 
-## 创建默认的线材加工工作配置：消耗金属和塑料，产出线材。
+## 创建默认的线材加工工作配置：消耗金属和塑料，产出线材。[br]
+## 返回新建的线材加工配置。
 static func create_fabrication() -> WorkType:
 	return WorkType.new(
 		&"fabrication",
@@ -72,7 +73,8 @@ static func create_fabrication() -> WorkType:
 	)
 
 
-## 创建废料分拣工作配置：消耗废料，产出金属、塑料和线材。
+## 创建废料分拣工作配置：消耗废料，产出金属、塑料和线材。[br]
+## 返回新建的废料分拣配置。
 static func create_scrap_sorting() -> WorkType:
 	return WorkType.new(
 		&"scrap_sorting",

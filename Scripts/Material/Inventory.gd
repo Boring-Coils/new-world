@@ -37,6 +37,7 @@ func get_item_count(item_type: int) -> int:
 
 
 ## 返回账本中已被其他持有者锁定的物资数量。[br]
+## [param item_type] 是要统计的物资类型。[br]
 ## [param except_holder] 指定需要排除的持有者，便于其重新评估自身锁。
 func get_locked_quantity(item_type: int, except_holder: String = "") -> int:
 	if not is_registered:
@@ -54,7 +55,9 @@ func get_available_volume() -> int:
 	return maxi(capacity - get_used_volume() - reserved_volume, 0)
 
 
-## 返回未被其他持有者锁定、可供 [param holder] 取用的物品数量。
+## 返回未被其他持有者锁定、可供 [param holder] 取用的物品数量。[br]
+## [param item_type] 是要查询的物资类型。[br]
+## [param holder] 是发起取用检查的持有者标识。
 func get_available_item_count(item_type: int, holder: String = "") -> int:
 	return maxi(
 		get_item_count(item_type) - get_locked_quantity(item_type, holder),
@@ -63,13 +66,15 @@ func get_available_item_count(item_type: int, holder: String = "") -> int:
 
 
 ## 判断 [param items_to_add] 是否为正体积且不超过当前可用容量。[br]
-## 本方法只预检空间，不检查物品类型是否合法，也不修改库存。
+## 本方法只预检空间，不检查物品类型是否合法，也不修改库存。[br]
+## 返回这批物品是否能完整写入当前库存。
 func can_add_items(items_to_add: Dictionary) -> bool:
 	var add_volume := MaterialTypes.get_total_volume(items_to_add)
 	return add_volume > 0 and add_volume <= get_available_volume()
 
 
 ## 在调用方已确认容量后直接写入物资。[br]
+## [param items_to_add] 是物资类型到新增数量的字典。[br]
 ## 会忽略非正数量；成功写入返回 [code]true[/code]，空间不足返回 [code]false[/code]。
 func add_items_unchecked(items_to_add: Dictionary) -> bool:
 	if not can_add_items(items_to_add):
@@ -82,7 +87,8 @@ func add_items_unchecked(items_to_add: Dictionary) -> bool:
 	return true
 
 
-## 直接移除最多 [param quantity] 个指定物资，并返回实际移除数量。
+## 直接移除最多 [param quantity] 个指定物资，并返回实际移除数量。[br]
+## [param item_type] 是要移除的物资类型。
 func remove_items_unchecked(item_type: int, quantity: int) -> int:
 	var removed := mini(maxi(quantity, 0), get_item_count(item_type))
 	items[item_type] = get_item_count(item_type) - removed

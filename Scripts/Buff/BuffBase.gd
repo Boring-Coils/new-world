@@ -21,6 +21,8 @@ var stacks: int = 1
 
 
 ## 由 [BuffSystem] 实例化后立刻调用，绑定类型和主人。[br]
+## [param p_type] 是当前 Buff 的枚举类型，用于识别和移除。[br]
+## [param p_human] 是持有该 Buff 的居民，后续效果直接作用于它。[br]
 ## 子类一般不用覆盖；要初始化自己的字段请覆盖 [method apply]。
 func setup(p_type: GlobalEnum.BuffType, p_human: Human) -> void:
 	buff_type = p_type
@@ -28,13 +30,15 @@ func setup(p_type: GlobalEnum.BuffType, p_human: Human) -> void:
 	name = GlobalEnum.BuffType.keys()[p_type]## name是节点名
 
 
-## 第一次添加时调用，[param params] 是 [method BuffSystem.add_buff] 收到的参数字典。[br]
+## 第一次添加时调用，[param _params] 是 [method BuffSystem.add_buff] 收到的参数字典。[br]
+## 它的键由具体 Buff 自行约定，基类不读取任何参数。[br]
 ## 时长要在这里写进 [member duration]，缺省值自己定；不写就是永久。
 func apply(_params: Dictionary) -> void:
 	pass
 
 
 ## 已经存在时再次添加调用。[br]
+## [param params] 是本次重复添加传入的参数，可包含新的持续时间等配置。[br]
 ## 默认行为是「层数 +1，并且如果这次带了 duration 就把时长刷满」，[br]
 ## 想让重复添加变成别的意思（比如只刷新时长、不叠层），覆盖它。
 func reapply(params: Dictionary) -> void:
@@ -54,31 +58,38 @@ func on_remove() -> void:
 	pass
 
 
-## 这个 buff 允不允许居民工作。默认允许，[BuffSystem] 把所有 buff 的结果取「与」
+## 这个 buff 允不允许居民工作。默认允许，[BuffSystem] 把所有 buff 的结果取「与」[br]
+## 返回当前 Buff 单独给出的工作许可。
 func can_work() -> bool:
 	return true
 
 
-## 移动速度倍率。默认 1.0，[BuffSystem] 把所有 buff 的结果相乘
+## 移动速度倍率。默认 1.0，[BuffSystem] 把所有 buff 的结果相乘[br]
+## 返回当前 Buff 对居民移动速度的独立倍率。
 func get_speed_multiplier() -> float:
 	return 1.0
 
 
-## 水 / 食物的消耗倍率。默认 1.0，[BuffSystem] 把所有 buff 的结果相乘
+## 水 / 食物的消耗倍率。默认 1.0，[BuffSystem] 把所有 buff 的结果相乘[br]
+## 返回当前 Buff 对基础水粮消耗的独立倍率。
 func get_consume_multiplier() -> float:
 	return 1.0
 
 
-## 每刻额外直接扣水量，默认 0.0；固定扣减不用乘到基础消耗倍率里。
+## 每刻额外直接扣水量，默认 0.0；固定扣减不用乘到基础消耗倍率里。[br]
+## 返回当前 Buff 每刻直接扣除的水量。
 func get_water_drain_per_tick() -> float:
 	return 0.0
 
 
-## 每刻额外直接扣食物量，默认 0.0。
+## 每刻额外直接扣食物量，默认 0.0。[br]
+## 返回当前 Buff 每刻直接扣除的食物量。
 func get_food_drain_per_tick() -> float:
 	return 0.0
 
 
-## 某类目标的决策权重倍率（0.0 = 完全不想去）。默认 1.0，[BuffSystem] 把所有 buff 的结果相乘
+## 某类目标的决策权重倍率（0.0 = 完全不想去）。默认 1.0，[BuffSystem] 把所有 buff 的结果相乘[br]
+## [param _goal] 是 [enum HumanAI.Goal] 中的目标类型，具体 Buff 可按目标返回不同倍率。[br]
+## 返回当前 Buff 对指定目标决策权重的独立倍率。
 func get_weight_multiplier(_goal: int) -> float:
 	return 1.0

@@ -18,6 +18,7 @@ func apply(params: Dictionary) -> void:
 	read_slow(params, DEFAULT_SLOW)
 
 
-## 眩晕期间始终禁止工作。
+## 眩晕期间始终禁止工作。[br]
+## 返回 [code]false[/code] 表示工作闸门关闭。
 func can_work() -> bool:
 	return false

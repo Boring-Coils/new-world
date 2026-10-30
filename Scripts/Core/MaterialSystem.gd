@@ -81,7 +81,8 @@ func register_inventory(inventory: Inventory, owner: Building = null) -> bool:
 	return true
 
 
-## 注销库存并使其关联的锁和预留立即失效。
+## 注销库存并使其关联的锁和预留立即失效。[br]
+## [param inventory] 是要从当前场景账本移除的库存实例。
 func unregister_inventory(inventory: Inventory) -> void:
 	if inventory == null:
 		return
@@ -90,7 +91,8 @@ func unregister_inventory(inventory: Inventory) -> void:
 	_invalidate_inventory_records(inventory.inventory_id)
 
 
-## 返回库存是否仍属于当前账本且标记为已登记。
+## 返回库存是否仍属于当前账本且标记为已登记。[br]
+## [param inventory] 是要检查登记状态的库存实例。
 func is_inventory_registered(inventory: Inventory) -> bool:
 	return (
 		inventory != null
@@ -140,7 +142,10 @@ func get_external_inventories(source_origin: Vector2i, excluded: Inventory = nul
 
 
 ## 汇总指定库存中某类物品被其他持有者锁定的数量。[br]
-## [param except_holder] 对应的锁不计入；无效、已关闭或已取走的锁也会跳过。
+## [param inventory] 是要统计锁定量的库存实例。[br]
+## [param item_type] 是要统计的物资类型。[br]
+## [param except_holder] 对应的锁不计入；无效、已关闭或已取走的锁也会跳过。[br]
+## 返回该库存中由其他持有者占用的指定物资数量。
 func get_inventory_locked_quantity(
 	inventory: Inventory,
 	item_type: int,
@@ -165,6 +170,11 @@ func get_inventory_locked_quantity(
 
 
 ## 在指定库存中锁定可用物品并返回锁标识。[br]
+## [param inventory] 是提供物品的库存。[br]
+## [param item_type] 是要锁定的物资类型。[br]
+## [param quantity] 是需要锁定的物品数量。[br]
+## [param holder] 是申请锁定的周期或调用方标识。[br]
+## [param source_origin] 是持有者来源格，用于后续回滚物资时按距离转移。[br]
 ## 数量非正、库存无效或可用数量不足时返回空字符串；成功后立即发出库存变化信号。
 func lock_items(
 	inventory: Inventory,
@@ -203,6 +213,7 @@ func lock_items(
 
 
 ## 从库存实际取出先前锁定的物品。[br]
+## [param lock_id] 是 [method lock_items] 返回的锁标识。[br]
 ## 同一锁重复调用会幂等返回 [code]true[/code]；库存失效或数量不足时标记锁无效并返回 [code]false[/code]。
 func take_locked(lock_id: String) -> bool:
 	var lock: Dictionary = _locks.get(lock_id, {})
@@ -227,7 +238,12 @@ func take_locked(lock_id: String) -> bool:
 
 
 ## 以“锁定、取出、消耗”三步直接取走库存物品。[br]
-## 任一步失败都会释放临时锁，避免留下悬空锁定记录。
+## [param inventory] 是提供物品的库存。[br]
+## [param item_type] 是要取走的物资类型。[br]
+## [param quantity] 是要取走的物品数量。[br]
+## [param holder] 是发起取用的居民或系统标识。[br]
+## 任一步失败都会释放临时锁，避免留下悬空锁定记录。[br]
+## 返回是否成功完成锁定、取出和消耗。
 func withdraw_items(
 	inventory: Inventory,
 	item_type: int,
@@ -251,6 +267,7 @@ func withdraw_items(
 
 
 ## 把已经取出的锁标记为已消耗并关闭。[br]
+## [param lock_id] 是要标记消耗的锁标识。[br]
 ## 锁无效、已关闭或尚未取出物品时返回 [code]false[/code]。
 func consume_locked(lock_id: String) -> bool:
 	var lock: Dictionary = _locks.get(lock_id, {})
@@ -264,6 +281,7 @@ func consume_locked(lock_id: String) -> bool:
 
 
 ## 关闭一个锁；若物品已经取出，则尝试退回原库存，失败时按来源距离转移。[br]
+## [param lock_id] 是要关闭并回滚的锁标识。[br]
 ## 关闭操作幂等，重复调用不会再次修改库存。
 func release_lock(lock_id: String) -> void:
 	var lock: Dictionary = _locks.get(lock_id, {})
@@ -291,25 +309,30 @@ func release_lock(lock_id: String) -> void:
 	return
 
 
-## 依次释放一组锁，忽略不存在的标识。
+## 依次释放一组锁，忽略不存在的标识。[br]
+## [param lock_ids] 是需要关闭的锁标识数组。
 func release_locks(lock_ids: Array[String]) -> void:
 	for lock_id in lock_ids:
 		release_lock(lock_id)
 
 
-## 返回锁记录的副本；不存在时返回空字典。
+## 返回锁记录的副本；不存在时返回空字典。[br]
+## [param lock_id] 是要读取的锁标识。
 func get_lock(lock_id: String) -> Dictionary:
 	var lock: Dictionary = _locks.get(lock_id, {})
 	return lock.duplicate() if not lock.is_empty() else {}
 
 
-## 返回锁是否存在、仍有效且尚未关闭。
+## 返回锁是否存在、仍有效且尚未关闭。[br]
+## [param lock_id] 是要检查的锁标识。
 func is_lock_valid(lock_id: String) -> bool:
 	var lock: Dictionary = _locks.get(lock_id, {})
 	return not lock.is_empty() and bool(lock["valid"]) and not bool(lock["closed"])
 
 
 ## 按需求和来源顺序为 [param demand] 建立物品锁。[br]
+## [param holder] 是本次需求锁的持有者标识。[br]
+## [param source_origin] 是持有者来源格，用于释放时按距离路由回滚物资。[br]
 ## 优先使用 [param primary]，再使用 [param externals]；任何物品无法足额锁定时回滚本次全部锁并返回空数组。
 func lock_demand(
 	demand: Dictionary,
@@ -348,6 +371,8 @@ func lock_demand(
 
 
 ## 为指定体积的产出预留库存空间并返回预留标识。[br]
+## [param volume] 是需要预留的产出总体积。[br]
+## [param holder] 是本次预留的周期或调用方标识。[br]
 ## 空间按 [param primary]、[param externals] 的顺序分配；无法足额预留时回滚并返回空数组。
 func reserve_output(
 	volume: int,
@@ -377,7 +402,8 @@ func reserve_output(
 	return reservation_ids
 
 
-## 关闭一个产出预留并归还对应库存的预留体积。
+## 关闭一个产出预留并归还对应库存的预留体积。[br]
+## [param reservation_id] 是要关闭的预留标识。
 func release_reservation(reservation_id: String) -> void:
 	var reservation: Dictionary = _reservations.get(reservation_id, {})
 	if reservation.is_empty() or bool(reservation["closed"]):
@@ -392,13 +418,15 @@ func release_reservation(reservation_id: String) -> void:
 		inventory_changed.emit(inventory)
 
 
-## 依次释放一组预留，忽略不存在或已关闭的标识。
+## 依次释放一组预留，忽略不存在或已关闭的标识。[br]
+## [param reservation_ids] 是需要关闭的预留标识数组。
 func release_reservations(reservation_ids: Array[String]) -> void:
 	for reservation_id in reservation_ids:
 		release_reservation(reservation_id)
 
 
-## 返回预留是否仍有效、未关闭且对应库存仍已登记。
+## 返回预留是否仍有效、未关闭且对应库存仍已登记。[br]
+## [param reservation_id] 是要检查的预留标识。
 func is_reservation_valid(reservation_id: String) -> bool:
 	var reservation: Dictionary = _reservations.get(reservation_id, {})
 	if reservation.is_empty() or bool(reservation["closed"]):
@@ -408,7 +436,9 @@ func is_reservation_valid(reservation_id: String) -> bool:
 	return is_inventory_registered(reservation["inventory"])
 
 
-## 汇总一组预留中仍然有效的体积。
+## 汇总一组预留中仍然有效的体积。[br]
+## [param reservation_ids] 是要汇总的预留标识数组。[br]
+## 返回其中仍有效预留的体积总和。
 func get_valid_reserved_volume(reservation_ids: Array[String]) -> int:
 	var volume := 0
 	for reservation_id in reservation_ids:
@@ -418,6 +448,7 @@ func get_valid_reserved_volume(reservation_ids: Array[String]) -> int:
 
 
 ## 清理 [param cycle] 已失效的产出预留，并尝试补足缺失空间。[br]
+## [param externals] 是补足空间时可使用的外部仓库库存列表。[br]
 ## 成功返回 [code]true[/code]；无法补足时周期保留已有效预留并返回 [code]false[/code]。
 func replace_invalid_reservations(
 	cycle: WorkCycle,
@@ -448,6 +479,7 @@ func replace_invalid_reservations(
 
 
 ## 原子结算一个已锁定工作周期：验证需求、补齐产出空间并写入产出。[br]
+## [param cycle] 是已经锁定需求并等待结算的工作周期。[br]
 ## 成功时消耗需求锁、释放产出预留并返回 [code]true[/code]；任一预检失败则不改动物资。
 func settle_cycle(cycle: WorkCycle) -> bool:
 	if cycle == null:
@@ -493,7 +525,8 @@ func settle_cycle(cycle: WorkCycle) -> bool:
 	return true
 
 
-## 取消工作周期，释放全部需求锁和产出预留并标记为已取消。
+## 取消工作周期，释放全部需求锁和产出预留并标记为已取消。[br]
+## [param cycle] 是需要回滚并取消的工作周期。
 func cancel_cycle(cycle: WorkCycle) -> void:
 	if cycle == null:
 		return
@@ -505,6 +538,9 @@ func cancel_cycle(cycle: WorkCycle) -> void:
 
 
 ## 清空并注销某个所有者库存，再把其中物资转移到其他仓库。[br]
+## [param owner] 是正在被移除或清算库存的建筑。[br]
+## [param source_origin] 是物资来源格，用于选择最近的转移目标。[br]
+## [param source_name] 是清算报告使用的来源名称，空值时使用建筑显示名。[br]
 ## 场景关闭期间只清空数据，不尝试跨场景转移；完成后报告转移与销毁体积。
 func cleanup_owner_inventory(
 	owner: Building,
@@ -532,7 +568,10 @@ func cleanup_owner_inventory(
 	)
 
 
-## 尝试把无主物资按来源位置转移到附近外部仓库，并返回成功转移的总体积。
+## 尝试把无主物资按来源位置转移到附近外部仓库，并返回成功转移的总体积。[br]
+## [param items] 是需要转移的物资类型与数量字典。[br]
+## [param source_origin] 是物资来源格，用于确定仓库优先级。[br]
+## [param source_inventory_id] 是原库存编号，用于避免把物资转回自身。
 func route_orphan_items(
 	items: Dictionary,
 	source_origin: Vector2i,
@@ -581,7 +620,8 @@ func get_open_reservation_count() -> int:
 	return count
 
 
-## 返回指定持有者当前有效且未关闭的锁数量。
+## 返回指定持有者当前有效且未关闭的锁数量。[br]
+## [param holder] 是要统计的锁持有者标识。
 func get_holder_open_lock_count(holder: String) -> int:
 	var count := 0
 	for lock in _locks.values():
@@ -594,7 +634,8 @@ func get_holder_open_lock_count(holder: String) -> int:
 	return count
 
 
-## 返回指定持有者当前有效且未关闭的预留数量。
+## 返回指定持有者当前有效且未关闭的预留数量。[br]
+## [param holder] 是要统计的预留持有者标识。
 func get_holder_open_reservation_count(holder: String) -> int:
 	var count := 0
 	for reservation in _reservations.values():
@@ -637,7 +678,11 @@ func validate() -> Array[String]:
 	return errors
 
 
-## 在已登记库存中创建一条产出预留记录并增加其预留体积。
+## 在已登记库存中创建一条产出预留记录并增加其预留体积。[br]
+## [param inventory] 是要预留空间的库存。[br]
+## [param volume] 是需要占用的空间体积。[br]
+## [param holder] 是预留的周期或调用方标识。[br]
+## 返回新建预留标识；库存无效或空间不足时返回空字符串。
 func _reserve_inventory_space(inventory: Inventory, volume: int, holder: String) -> String:
 	if not is_inventory_registered(inventory) or volume <= 0:
 		return ""
@@ -659,7 +704,8 @@ func _reserve_inventory_space(inventory: Inventory, volume: int, holder: String)
 	return reservation_id
 
 
-## 使某个库存关联的全部未关闭锁和预留失效。
+## 使某个库存关联的全部未关闭锁和预留失效。[br]
+## [param inventory_id] 是已经注销的库存编号。
 func _invalidate_inventory_records(inventory_id: int) -> void:
 	for lock in _locks.values():
 		if int(lock["inventory_id"]) == inventory_id and not bool(lock["closed"]):
@@ -670,7 +716,9 @@ func _invalidate_inventory_records(inventory_id: int) -> void:
 			reservation["closed"] = true
 
 
-## 把有效预留标识转换为结算用的目标库存与体积记录。
+## 把有效预留标识转换为结算用的目标库存与体积记录。[br]
+## [param reservation_ids] 是需要转换的预留标识数组。[br]
+## 返回每个有效预留对应的目标库存、体积和标识。
 func _get_reservation_destinations(reservation_ids: Array[String]) -> Array[Dictionary]:
 	var destinations: Array[Dictionary] = []
 	for reservation_id in reservation_ids:
@@ -686,6 +734,7 @@ func _get_reservation_destinations(reservation_ids: Array[String]) -> Array[Dict
 
 
 ## 从主库存和仓库中寻找无需预留的可用产出空间。[br]
+## [param required_volume] 是还需要分配的产出体积。[br]
 ## 优先 [param primary]，其余仓库按坐标稳定排序；空间不足时返回空数组。
 func _find_unreserved_space(
 	required_volume: int,
@@ -725,13 +774,18 @@ func _find_unreserved_space(
 	return result
 
 
-## 在不修改库存的前提下验证物品能否完整分配到目标空间。
+## 在不修改库存的前提下验证物品能否完整分配到目标空间。[br]
+## [param items] 是待分配物资字典。[br]
+## [param destinations] 是带有库存和可分配体积的目标记录。[br]
+## 返回所有物品能否完整放入这些目标。
 func _can_allocate_items(items: Dictionary, destinations: Array[Dictionary]) -> bool:
 	var remaining := _positive_items(items)
 	return _is_empty_items(_allocate_items_dry_run(remaining, destinations))
 
 
-## 执行一次不写库存的空间分配试算，并返回未分配物品。
+## 执行一次不写库存的空间分配试算，并返回未分配物品。[br]
+## [param items] 是待试分配的物资字典。[br]
+## [param destinations] 是本次可用的目标库存及体积记录。
 func _allocate_items_dry_run(
 	items: Dictionary,
 	destinations: Array[Dictionary],
@@ -752,7 +806,9 @@ func _allocate_items_dry_run(
 	return remaining
 
 
-## 将物品依次写入目标库存，并返回未能分配的剩余物品。
+## 将物品依次写入目标库存，并返回未能分配的剩余物品。[br]
+## [param items] 是要写入的物资字典。[br]
+## [param destinations] 是目标库存及可分配体积记录。
 func _allocate_items(
 	items: Dictionary,
 	destinations: Array[Dictionary],
@@ -779,7 +835,10 @@ func _allocate_items(
 	return remaining
 
 
-## 按来源距离把物品写入外部仓库，并返回成功转移的总体积。
+## 按来源距离把物品写入外部仓库，并返回成功转移的总体积。[br]
+## [param items] 是需要转移的物资字典。[br]
+## [param source_origin] 是物资来源格，用于仓库排序。[br]
+## [param excluded_inventory_id] 是必须排除的原库存编号。
 func _route_items(
 	items: Dictionary,
 	source_origin: Vector2i,
@@ -808,7 +867,9 @@ func _route_items(
 	return moved_volume
 
 
-## 过滤出数量为正的物品，形成新的分配字典。
+## 过滤出数量为正的物品，形成新的分配字典。[br]
+## [param items] 是可能包含零值、负值或未知类型的原始字典。[br]
+## 返回仅保留正数量已知物资的新字典。
 func _positive_items(items: Dictionary) -> Dictionary:
 	var result: Dictionary = {}
 	for item_type in MaterialTypes.get_item_types():
@@ -818,7 +879,9 @@ func _positive_items(items: Dictionary) -> Dictionary:
 	return result
 
 
-## 判断物品字典中是否不再包含正数量。
+## 判断物品字典中是否不再包含正数量。[br]
+## [param items] 是要检查的物资字典。[br]
+## 返回是否所有已知物资数量都不大于 0。
 func _is_empty_items(items: Dictionary) -> bool:
 	for item_type in items:
 		if int(items[item_type]) > 0:
@@ -826,7 +889,10 @@ func _is_empty_items(items: Dictionary) -> bool:
 	return true
 
 
-## 合并主库存与外部库存，过滤无效项并按首次出现顺序去重。
+## 合并主库存与外部库存，过滤无效项并按首次出现顺序去重。[br]
+## [param primary] 是优先尝试的主库存，可为 null。[br]
+## [param externals] 是候选外部库存数组。[br]
+## 返回去重后的有效库存列表。
 func _unique_inventories(
 	primary: Inventory,
 	externals: Array[Inventory],
@@ -840,6 +906,9 @@ func _unique_inventories(
 	return result
 
 
-## 计算两个格子之间的切比雪夫距离，用于八方向移动和距离排序。
+## 计算两个格子之间的切比雪夫距离，用于八方向移动和距离排序。[br]
+## [param a] 是第一个格子坐标。[br]
+## [param b] 是第二个格子坐标。[br]
+## 返回两点在八方向步数意义下的距离。
 func _chebyshev(a: Vector2i, b: Vector2i) -> int:
 	return maxi(absi(a.x - b.x), absi(a.y - b.y))

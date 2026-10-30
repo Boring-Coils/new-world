@@ -30,19 +30,23 @@ func get_wait_ticks() -> int:
 	return WAIT_TICKS
 
 
-## 居民进门：登记占用；显隐由 [Human] 的语义接口执行。
+## 居民进门：登记占用；显隐由 [Human] 的语义接口执行。[br]
+## [param human] 是要登记为站内占用的居民。[br]
+## 返回登记是否完成；当前实现即使居民已在名单中也视为成功。
 func enter(human: Human) -> bool:
 	if not occupants.has(human):
 		occupants.append(human)
 	return true
 
 
-## 居民出门：从名单里移除。
+## 居民出门：从名单里移除。[br]
+## [param human] 是正在离开工作站内部的居民。
 func leave(human: Human) -> void:
 	occupants.erase(human)
 
 
-## 现在里面还有几个人（调试面板用）
+## 现在里面还有几个人（调试面板用）[br]
+## 返回当前站内占用名单中的居民数量。
 func get_occupant_count() -> int:
 	return occupants.size()
 

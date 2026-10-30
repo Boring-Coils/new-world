@@ -11,7 +11,9 @@ const MIN_SPEED_MULTIPLIER: float = 0.1
 var slow: float = 0.0
 
 
-## 从参数字典里读 [code]slow[/code]；没传就沿用上次的值，第一次则用 [param fallback]
+## 从参数字典里读 [code]slow[/code]；没传就沿用上次的值，第一次则用 [param fallback][br]
+## [param params] 是 Buff 添加或重复添加时传入的配置字典。[br]
+## [param fallback] 是首次添加且字典未提供减速比例时使用的默认值。
 func read_slow(params: Dictionary, fallback: float) -> void:
 	if params.has("slow"):
 		slow = clampf(float(params["slow"]), 0.0, 1.0)
@@ -19,7 +21,8 @@ func read_slow(params: Dictionary, fallback: float) -> void:
 		slow = clampf(fallback, 0.0, 1.0)
 
 
-## 重复添加时强度取更高的那个：累加太容易叠成 0，不如「取最强」直观
+## 重复添加时强度取更高的那个：累加太容易叠成 0，不如「取最强」直观[br]
+## [param params] 是本次重复添加的配置，可包含新的减速比例。
 func reapply(params: Dictionary) -> void:
 	super.reapply(params)
 	if params.has("slow"):

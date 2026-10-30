@@ -47,7 +47,8 @@ func _setup_grid() -> void:
 
 
 ## 全局快捷键：空格暂停/继续，数字 1~4 切倍速。[br]
-## 放在 World 而不是某个具体场景里，这样 Colony 和 TestScene 都自带这套操作。
+## 放在 World 而不是某个具体场景里，这样 Colony 和 TestScene 都自带这套操作。[br]
+## [param event] 是当前尚未被其他控件处理的输入事件。
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_accept"):
 		TickManager.auto_run = not TickManager.auto_run

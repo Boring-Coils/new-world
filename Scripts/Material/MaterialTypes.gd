@@ -45,7 +45,8 @@ static func get_display_name(item_type: int) -> String:
 
 
 ## 汇总 [param items] 中所有非负数量对应的总体积。[br]
-## 未知物品按 0 体积处理，负数数量不会抵扣其他物品的体积。
+## 未知物品按 0 体积处理，负数数量不会抵扣其他物品的体积。[br]
+## 返回 [param items] 表示的全部物资体积总和。
 static func get_total_volume(items: Dictionary) -> int:
 	var total := 0
 	for item_type in items:

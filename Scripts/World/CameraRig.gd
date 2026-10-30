@@ -39,7 +39,8 @@ func _ready() -> void:
 	_camera.make_current()
 
 
-## 处理每帧键盘平移，并在中键意外松开时结束拖动状态。
+## 处理每帧键盘平移，并在中键意外松开时结束拖动状态。[br]
+## [param delta] 是当前帧相距上一帧的现实秒数，用于计算连续平移距离。
 func _process(delta: float) -> void:
 	# 拖到一半在中键之外松开、或者窗口失焦，别让相机一直粘着鼠标
 	if _dragging and not Input.is_mouse_button_pressed(MOUSE_BUTTON_MIDDLE):
@@ -60,7 +61,8 @@ func _process(delta: float) -> void:
 		_camera.position += direction.normalized() * KEY_PAN_SPEED * delta / _camera.zoom.x
 
 
-## 处理中键拖动、滚轮缩放和拖动时的鼠标位移。
+## 处理中键拖动、滚轮缩放和拖动时的鼠标位移。[br]
+## [param event] 是当前尚未被其他控件处理的输入事件。
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_MIDDLE:
 		_dragging = event.pressed
@@ -94,6 +96,7 @@ func _zoom(factor: float) -> void:
 	_camera.zoom = Vector2(zoom_new, zoom_new)
 
 
-## 当前相机，给需要知道视野范围的代码用
+## 当前相机，给需要知道视野范围的代码用[br]
+## 返回本控制器创建的 [Camera2D] 实例。
 func get_camera() -> Camera2D:
 	return _camera

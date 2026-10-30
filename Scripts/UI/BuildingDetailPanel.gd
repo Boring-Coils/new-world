@@ -115,7 +115,8 @@ func _update_panel_width() -> void:
 	_panel.offset_right = 0.0
 
 
-## 让某一栋建筑的点击都连到这里
+## 让某一栋建筑的点击都连到这里[br]
+## [param building] 是需要连接点击信号的建筑实例。
 func _connect_building(building: Building) -> void:
 	if building == null or not is_instance_valid(building):
 		return
@@ -123,7 +124,8 @@ func _connect_building(building: Building) -> void:
 		building.clicked.connect(show_building)
 
 
-## 显示某一栋建筑的详情（同一栋再点一次就收起）
+## 显示某一栋建筑的详情（同一栋再点一次就收起）[br]
+## [param building] 是要显示或收起的建筑实例。
 func show_building(building: Building) -> void:
 	if _current == building:
 		hide_panel()
@@ -140,7 +142,8 @@ func hide_panel() -> void:
 		_panel.visible = false
 
 
-## 面板开着没有
+## 面板开着没有[br]
+## 返回详情面板当前是否可见。
 func is_open() -> bool:
 	return _panel != null and _panel.visible
 
@@ -158,7 +161,8 @@ func _on_demolish_pressed() -> void:
 	building.remove()
 
 
-## 点空地收起：点建筑的那一下会被建筑自己的按钮吃掉，走不到这里
+## 点空地收起：点建筑的那一下会被建筑自己的按钮吃掉，走不到这里[br]
+## [param event] 是当前尚未被其他控件处理的输入事件。
 func _unhandled_input(event: InputEvent) -> void:
 	if not is_open():
 		return
@@ -166,7 +170,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		hide_panel()
 
 
-## 面板打开时在每刻结束后刷新当前建筑内容。
+## 面板打开时在每刻结束后刷新当前建筑内容。[br]
+## [param _total_ticks] 是当前全局累计刻数，本方法只关心刷新时机，因此不使用该值。[br]
+## [param _day] 是当前游戏日序号，本方法不使用该值。[br]
+## [param _tick_of_day] 是当前日内刻序号，本方法不使用该值。
 func _on_tick_advanced(_total_ticks: int, _day: int, _tick_of_day: int) -> void:
 	if is_open():
 		_refresh()
@@ -248,7 +255,8 @@ func _rebuild_rows(visible_sections: Array[Dictionary]) -> void:
 			_body.add_child(row_widget)
 
 
-## 在不重建控件的前提下刷新现有文本值和数字输入值。
+## 在不重建控件的前提下刷新现有文本值和数字输入值。[br]
+## [param visible_sections] 是当前需要显示的板块及其行数据。
 func _update_rows(visible_sections: Array[Dictionary]) -> void:
 	for wrapper in visible_sections:
 		var section: Dictionary = wrapper["section"]
@@ -267,7 +275,10 @@ func _update_rows(visible_sections: Array[Dictionary]) -> void:
 					value_label.text = String(row["value"])
 
 
-## 创建“左侧标签、右侧文本或数字输入”的一行控件，并登记到缓存。
+## 创建“左侧标签、右侧文本或数字输入”的一行控件，并登记到缓存。[br]
+## [param row_data] 是行类型、显示文本、数值和回调定义。[br]
+## [param row_key] 是该行在控件缓存中的结构键。[br]
+## 返回创建完成的水平行控件。
 func _make_row(row_data: Dictionary, row_key: String) -> HBoxContainer:
 	var row := HBoxContainer.new()
 
@@ -320,7 +331,8 @@ func _make_row(row_data: Dictionary, row_key: String) -> HBoxContainer:
 	return row
 
 
-## 递归判断 [param node] 或其子节点是否持有键盘焦点。
+## 递归判断 [param node] 或其子节点是否持有键盘焦点。[br]
+## 返回是否存在持有焦点的控件。
 func _has_focused_control(node: Node) -> bool:
 	var control := node as Control
 	if control != null and control.has_focus():
@@ -331,7 +343,8 @@ func _has_focused_control(node: Node) -> bool:
 	return false
 
 
-## 供 UI 自检使用：检查面板是否越界、文本是否超出控件、行内控件是否重叠。
+## 供 UI 自检使用：检查面板是否越界、文本是否超出控件、行内控件是否重叠。[br]
+## 返回检测到的布局问题说明数组；无问题时为空数组。
 func get_layout_issues() -> Array[String]:
 	var issues: Array[String] = []
 	if _panel == null or not _panel.visible:
@@ -342,7 +355,8 @@ func get_layout_issues() -> Array[String]:
 	return issues
 
 
-## 递归检查控件最小尺寸、文本截断和水平子控件重叠，并追加到 [param issues]。
+## 递归检查控件最小尺寸、文本截断和水平子控件重叠，并追加到 [param issues]。[br]
+## [param node] 是当前递归检查的节点。[br]
 func _collect_layout_issues(node: Node, issues: Array[String]) -> void:
 	var control := node as Control
 	if control != null and control.visible:

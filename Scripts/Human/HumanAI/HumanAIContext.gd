@@ -60,6 +60,7 @@ func refresh(human: Human) -> void:
 
 
 ## 返回当前资源在 [param per_tick] 消耗速度下还能维持的刻数。[br]
+## [param amount] 是当前资源余量。[br]
 ## 消耗速度非正时返回无穷大，资源为负时按 0 处理。
 func _get_ticks_left(amount: float, per_tick: float) -> float:
 	if per_tick <= 0.0:

@@ -1877,7 +1877,13 @@ func _test_integration() -> void:
 	)
 
 
-## 创建并放置一个可配置工作站，记录到验收生命周期并返回实例。
+## 创建并放置一个可配置工作站，记录到验收生命周期并返回实例。[br]
+## [param origin] 是工作站左上角格子。[br]
+## [param demand] 是工作周期需求物资配置。[br]
+## [param output] 是工作周期产出物资配置。[br]
+## [param duration] 是完成一次工作的刻数。[br]
+## [param target] 是建筑初始目标工人数。[br]
+## 返回已经创建并追踪的测试工作站。
 func _create_workstation(
 	origin: Vector2i,
 	demand: Dictionary,
@@ -1903,7 +1909,10 @@ func _create_workstation(
 	return station
 
 
-## 创建并放置一个测试仓库，记录到验收生命周期并返回实例。
+## 创建并放置一个测试仓库，记录到验收生命周期并返回实例。[br]
+## [param origin] 是仓库左上角格子。[br]
+## [param items] 是仓库初始物资。[br]
+## 返回已经创建并追踪的测试仓库。
 func _create_test_warehouse(
 	origin: Vector2i,
 	items: Dictionary = {},
@@ -1920,7 +1929,11 @@ func _create_test_warehouse(
 	return test_warehouse
 
 
-## 在指定格生成居民，记录到验收生命周期并返回实例。
+## 在指定格生成居民，记录到验收生命周期并返回实例。[br]
+## [param cell] 是居民出生格。[br]
+## [param age_status] 是居民年龄阶段。[br]
+## [param age] 是居民具体年龄。[br]
+## 返回已经生成并追踪的测试居民。
 func _spawn_human(
 	cell: Vector2i,
 	age_status: GlobalEnum.AgeStatus = GlobalEnum.AgeStatus.ADULT,
@@ -1937,7 +1950,12 @@ func _spawn_human(
 	return human
 
 
-## 创建不属于场景树的虚拟建筑所有者，用于隔离库存账本测试。
+## 创建不属于场景树的虚拟建筑所有者，用于隔离库存账本测试。[br]
+## [param capacity] 是虚拟库存容量。[br]
+## [param origin] 是虚拟建筑用于距离排序的格子坐标。[br]
+## [param is_warehouse] 指定该所有者是否作为公共仓库参与候选排序。[br]
+## [param items] 是虚拟库存的初始物资。[br]
+## 返回登记了虚拟库存的建筑对象。
 func _create_virtual_owner(
 	capacity: int,
 	origin: Vector2i,
@@ -1958,7 +1976,12 @@ func _create_virtual_owner(
 	return owner
 
 
-## 创建并登记一个独立测试库存。
+## 创建并登记一个独立测试库存。[br]
+## [param capacity] 是库存容量。[br]
+## [param origin] 是虚拟所有者所在格，用于距离排序。[br]
+## [param is_warehouse] 指定虚拟所有者是否作为公共仓库。[br]
+## [param items] 是库存初始物资。[br]
+## 返回已登记到 [MaterialSystem] 的测试库存。
 func _create_virtual_inventory(
 	capacity: int,
 	origin: Vector2i,
@@ -2039,7 +2062,10 @@ func _clear_virtual_owners() -> void:
 	_virtual_owners.clear()
 
 
-## 从详情板块数组中查找指定板块 ID 的数据。
+## 从详情板块数组中查找指定板块 ID 的数据。[br]
+## [param sections] 是建筑详情返回的板块数组。[br]
+## [param section_id] 是要查找的板块标识。[br]
+## 返回匹配板块字典；不存在时返回空字典。
 func _find_section(sections: Array[Dictionary], section_id: String) -> Dictionary:
 	for section in sections:
 		if String(section.get("id", "")) == section_id:
@@ -2047,7 +2073,10 @@ func _find_section(sections: Array[Dictionary], section_id: String) -> Dictionar
 	return {}
 
 
-## 从详情板块中查找指定行键的数据。
+## 从详情板块中查找指定行键的数据。[br]
+## [param section] 是包含行列表的板块字典。[br]
+## [param key] 是要查找的行稳定标识。[br]
+## 返回匹配行字典；不存在时返回空字典。
 func _find_row(section: Dictionary, key: String) -> Dictionary:
 	if section.is_empty():
 		return {}
@@ -2057,7 +2086,9 @@ func _find_row(section: Dictionary, key: String) -> Dictionary:
 	return {}
 
 
-## 深度查找节点下第一个可用的 [SpinBox]。
+## 深度查找节点下第一个可用的 [SpinBox]。[br]
+## [param node] 是开始递归搜索的节点。[br]
+## 返回第一个找到的数字输入控件；不存在时返回 null。
 func _find_first_spinbox(node: Node) -> SpinBox:
 	if node is SpinBox:
 		return node as SpinBox
@@ -2068,7 +2099,9 @@ func _find_first_spinbox(node: Node) -> SpinBox:
 	return null
 
 
-## 比较建筑节点位置与 [param center_cell] 对应的格子中心是否在浮点容差内一致。
+## 比较建筑节点位置与 [param center_cell] 对应的格子中心是否在浮点容差内一致。[br]
+## [param building] 是要检查位置的建筑节点。[br]
+## 返回建筑位置是否与目标格中心匹配。
 func world_position_matches(building: Building, center_cell: Vector2i) -> bool:
 	var expected_origin := center_cell - Vector2i(
 		building.size_cells.x / 2,

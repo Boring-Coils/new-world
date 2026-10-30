@@ -170,7 +170,8 @@ func on_tick() -> void:
 		motion.on_tick()
 
 
-## 响应移动到达：工作事务优先处理，等待目标到达后转入等待状态。
+## 响应移动到达：工作事务优先处理，等待目标到达后转入等待状态。[br]
+## [param _destination] 是移动组件报告的到达格；路径状态由当前目标持有，因此本方法不直接使用它。
 func _on_motion_arrived(_destination: Vector2i) -> void:
 	if _active_state_key == &"working" and _work_behavior.is_busy():
 		_work_behavior.on_motion_arrived()
@@ -182,7 +183,8 @@ func _on_motion_arrived(_destination: Vector2i) -> void:
 	send_event(EVENT_ARRIVED)
 
 
-## 响应路径失败：工作事务自行取消，其余状态发送通用路径失败事件。
+## 响应路径失败：工作事务自行取消，其余状态发送通用路径失败事件。[br]
+## [param _destination] 是移动组件报告的失败目标格；事件处理由当前状态决定，因此本方法不直接使用它。
 func _on_motion_path_failed(_destination: Vector2i) -> void:
 	if _active_state_key == &"working" and _work_behavior.is_busy():
 		_work_behavior.on_path_failed()
@@ -237,7 +239,8 @@ func force_next_decision() -> void:
 	_force_decision = true
 
 
-## 判断本刻是否允许决策；强制决策优先于周期相位。
+## 判断本刻是否允许决策；强制决策优先于周期相位。[br]
+## 返回本刻是否取得一次决策机会。
 func _consume_decision_slot() -> bool:
 	if _force_decision:
 		_force_decision = false
@@ -273,7 +276,8 @@ func _is_work_goal_available() -> bool:
 	)
 
 
-## 前往世界等待锚点并叠加居民的个人偏移。
+## 前往世界等待锚点并叠加居民的个人偏移。[br]
+## 返回等待点路线是否成功开始。
 func _start_wait_travel() -> bool:
 	var world_node := _find_world_ancestor()
 	if world_node == null:
@@ -284,7 +288,8 @@ func _start_wait_travel() -> bool:
 	return motion.move_to_position(wait_position)
 
 
-## 从居民父节点向上查找最近的 [World]。
+## 从居民父节点向上查找最近的 [World]。[br]
+## 返回找到的世界根节点；场景结构不完整时返回 null。
 func _find_world_ancestor() -> World:
 	var node: Node = human.get_parent()
 	while node != null:
@@ -312,7 +317,9 @@ func _find_target_for_goal(goal: int) -> Building:
 			return null
 
 
-## 原子更新当前目标与目标建筑，并在目标变化时发出 [signal goal_changed]。
+## 原子更新当前目标与目标建筑，并在目标变化时发出 [signal goal_changed]。[br]
+## [param new_goal] 是新的 [enum Goal] 目标类型。[br]
+## [param new_target] 是新目标对应的建筑；等待或无目标时为 null。
 func _set_goal(new_goal: int, new_target: Building) -> void:
 	var old_goal := _goal
 	_goal = new_goal
@@ -338,7 +345,8 @@ func get_target() -> Building:
 	return _target
 
 
-## 验证当前目标是否仍与目标类型、放置状态和雇佣关系一致。
+## 验证当前目标是否仍与目标类型、放置状态和雇佣关系一致。[br]
+## 返回当前目标和目标建筑是否仍可继续使用。
 func is_target_valid() -> bool:
 	if _goal == Goal.WAIT:
 		return true
@@ -368,7 +376,8 @@ func is_work_allowed() -> bool:
 	return _context.can_work
 
 
-## 为当前目标启动移动；等待目标前往等待点，其他目标前往目标建筑。
+## 为当前目标启动移动；等待目标前往等待点，其他目标前往目标建筑。[br]
+## 返回移动是否已成功开始或已在进行中。
 func start_travel_to_current_target() -> bool:
 	if _goal == Goal.WAIT:
 		return _start_wait_travel()
@@ -407,7 +416,8 @@ func complete_current_wait() -> StringName:
 			return EVENT_TARGET_INVALID
 
 
-## 在当前目标有效时启动居民的工作周期。
+## 在当前目标有效时启动居民的工作周期。[br]
+## 返回工作周期是否成功创建并进入执行阶段。
 func begin_work_cycle() -> bool:
 	if not is_target_valid() or not is_instance_valid(human.employer):
 		return false
@@ -489,7 +499,8 @@ func try_interrupt_work_goal() -> bool:
 	return false
 
 
-## 评估工作状态当前应执行的中断类型。
+## 评估工作状态当前应执行的中断类型。[br]
+## 返回 [enum WorkInterrupt] 中的中断决策。
 func evaluate_work_interrupt() -> int:
 	if not is_target_valid() or not is_instance_valid(human.employer):
 		return WorkInterrupt.CANCEL
@@ -502,7 +513,8 @@ func evaluate_work_interrupt() -> int:
 	return WorkInterrupt.NONE
 
 
-## 取消工作周期并立即离开当前建筑；不在建筑内时仅停止工作。
+## 取消工作周期并立即离开当前建筑；不在建筑内时仅停止工作。[br]
+## 返回是否实际发起了一次从建筑内部离开的移动。
 func leave_work_now() -> bool:
 	cancel_work_cycle("居民离开工作")
 	if is_instance_valid(human.in_building):
@@ -513,7 +525,8 @@ func leave_work_now() -> bool:
 	return false
 
 
-## 处理 [param building] 的雇佣结束，清理目标、移动与工作状态。
+## 处理 [param building] 的雇佣结束，清理目标、移动与工作状态。[br]
+## [param reason] 是结束雇佣并向工作周期传播的原因。
 func on_employment_ended(building: Building, reason: String) -> void:
 	if human.employer == building:
 		human.employer = null
@@ -537,7 +550,8 @@ func request_relocation() -> void:
 	state_chart.send_event(EVENT_RELOCATION_REQUESTED)
 
 
-## 清除普通目标并请求 [HumanMotion] 前往最近安全格。
+## 清除普通目标并请求 [HumanMotion] 前往最近安全格。[br]
+## 返回脱困路线是否成功开始或已直接完成。
 func begin_relocation() -> bool:
 	clear_goal()
 	return motion.relocate_to_nearest_walkable()

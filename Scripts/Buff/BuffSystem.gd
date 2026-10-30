@@ -30,12 +30,14 @@ var target_human: Human = null
 
 
 ## 由 [Human] 在 _ready 里调用，显式绑定主人。[br]
+## [param host] 是持有本 BuffSystem 的居民，后续添加效果都会作用于它。[br]
 ## 不用 [method Node.get_parent] 猜——那样 [BuffSystem] 离开 Human 就不能用，也没法单独测。
 func attach(host: Human) -> void:
 	target_human = host
 
 
 ## 添加一个 buff。[br]
+## [param type] 指定要添加的 Buff 类型。[br]
 ## [param params] 是可选的参数字典，键名由各个 buff 自己约定，[br]
 ## 例如疲劳认 [code]duration[/code] / [code]slow[/code]。[br]
 ## 返回实际生效的那个 buff 节点：新建的和复用的都是它，方便测试时直接读状态。
@@ -70,7 +72,8 @@ func add_buff(type: GlobalEnum.BuffType, params: Dictionary = {}) -> BuffBase:
 	return buff
 
 
-## 移除一个 buff（不存在的类型直接忽略，不报错）
+## 移除一个 buff（不存在的类型直接忽略，不报错）。[br]
+## [param type] 指定要移除的 Buff 类型。
 func remove_buff(type: GlobalEnum.BuffType) -> void:
 	var buff := get_buff(type)
 	if buff == null:
@@ -87,12 +90,16 @@ func clear_all() -> void:
 		remove_buff(buff.buff_type)
 
 
-## 有没有这个 buff
+## 检查当前居民是否带有指定 Buff。[br]
+## [param type] 是要查询的 Buff 类型。[br]
+## 返回是否存在该类型的有效 Buff。
 func has_buff(type: GlobalEnum.BuffType) -> bool:
 	return get_buff(type) != null
 
 
-## 取出这个 buff，没有返回 null
+## 取出指定类型的 Buff 实例。[br]
+## [param type] 是要查找的 Buff 类型。[br]
+## 返回找到的 Buff 节点；不存在时返回 null。
 func get_buff(type: GlobalEnum.BuffType) -> BuffBase:
 	for buff in buffs:
 		if is_instance_valid(buff) and buff.buff_type == type:
@@ -114,7 +121,8 @@ func on_tick() -> void:
 			remove_buff(buff.buff_type)
 
 
-## 汇总：只要有一个 buff 说不能工作，就是不能工作
+## 汇总：只要有一个 buff 说不能工作，就是不能工作[br]
+## 返回全部 Buff 工作闸门取逻辑与后的结果。
 func can_work() -> bool:
 	for buff in buffs:
 		if is_instance_valid(buff) and not buff.can_work():
@@ -122,7 +130,8 @@ func can_work() -> bool:
 	return true
 
 
-## 汇总：所有 buff 的速度倍率相乘
+## 汇总：所有 buff 的速度倍率相乘[br]
+## 返回全部 Buff 速度倍率相乘后的最终倍率。
 func get_speed_multiplier() -> float:
 	var result := 1.0
 	for buff in buffs:
@@ -131,7 +140,8 @@ func get_speed_multiplier() -> float:
 	return result
 
 
-## 汇总：所有 buff 的消耗倍率相乘
+## 汇总：所有 buff 的消耗倍率相乘[br]
+## 返回全部 Buff 消耗倍率相乘后的最终倍率。
 func get_consume_multiplier() -> float:
 	var result := 1.0
 	for buff in buffs:
@@ -140,7 +150,8 @@ func get_consume_multiplier() -> float:
 	return result
 
 
-## 汇总所有 Buff 每刻直接扣掉的水量。
+## 汇总所有 Buff 每刻直接扣掉的水量。[br]
+## 返回全部 Buff 每刻直接扣水量的总和。
 func get_water_drain_per_tick() -> float:
 	var result := 0.0
 	for buff in buffs:
@@ -149,7 +160,8 @@ func get_water_drain_per_tick() -> float:
 	return result
 
 
-## 汇总所有 Buff 每刻直接扣掉的食物量。
+## 汇总所有 Buff 每刻直接扣掉的食物量。[br]
+## 返回全部 Buff 每刻直接扣食物量的总和。
 func get_food_drain_per_tick() -> float:
 	var result := 0.0
 	for buff in buffs:
@@ -158,7 +170,9 @@ func get_food_drain_per_tick() -> float:
 	return result
 
 
-## 汇总：所有 buff 对这类目标的权重倍率相乘
+## 汇总：所有 buff 对这类目标的权重倍率相乘[br]
+## [param goal] 是 [enum HumanAI.Goal] 中的目标类型。[br]
+## 返回全部 Buff 对该目标权重倍率相乘后的结果。
 func get_weight_multiplier(goal: int) -> float:
 	var result := 1.0
 	for buff in buffs:

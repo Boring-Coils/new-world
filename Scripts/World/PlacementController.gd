@@ -52,7 +52,8 @@ func _ready() -> void:
 	z_index = 50
 
 
-## 每帧刷新预览（不依赖鼠标移动事件，鼠标停在原地也能保持对齐）
+## 每帧刷新预览（不依赖鼠标移动事件，鼠标停在原地也能保持对齐）[br]
+## [param _delta] 是当前帧间隔；预览刷新不依赖时间变化，因此本方法不使用该值。
 func _process(_delta: float) -> void:
 	if kind != Kind.NONE:
 		_update_hover()
@@ -76,7 +77,8 @@ func select_kind(new_kind: int) -> void:
 	queue_redraw()
 
 
-## 启用或禁用所有已登记建筑的点击区，防止放置点击被建筑按钮吞掉。
+## 启用或禁用所有已登记建筑的点击区，防止放置点击被建筑按钮吞掉。[br]
+## [param enabled] 为 [code]true[/code] 时恢复建筑点击，为 [code]false[/code] 时允许放置事件穿透。
 func _set_buildings_clickable(enabled: bool) -> void:
 	for building in TickManager.buildings:
 		if is_instance_valid(building):
@@ -88,7 +90,8 @@ func cancel() -> void:
 	select_kind(Kind.NONE)
 
 
-## 处理放置模式下的左键提交、右键取消和 Escape 取消。
+## 处理放置模式下的左键提交、右键取消和 Escape 取消。[br]
+## [param event] 是当前尚未被其他控件处理的输入事件。
 func _unhandled_input(event: InputEvent) -> void:
 	if kind == Kind.NONE:
 		return
@@ -107,7 +110,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 
-## 根据当前预览尺寸计算建筑左上角，使建筑尽量以 [param mouse_cell] 为中心。
+## 根据当前预览尺寸计算建筑左上角，使建筑尽量以 [param mouse_cell] 为中心。[br]
+## 返回根据当前预览尺寸偏移后的建筑左上角格子。
 func _origin_for(mouse_cell: Vector2i) -> Vector2i:
 	if _ghost == null or not is_instance_valid(_ghost):
 		return mouse_cell
@@ -187,7 +191,8 @@ func _evict_humans_in(building: Building) -> void:
 		print("[PLACE] 有 %d 个居民被 %s 压住，正在自己走出来" % [moved, building.name])
 
 
-## 在可走且无其他居民的 [param cell] 创建一个成年居民。
+## 在可走且无其他居民的 [param cell] 创建一个成年居民。[br]
+## 返回居民是否成功创建并加入世界。
 func _place_human(cell: Vector2i) -> bool:
 	var world := WorldGridGlobal.world
 	if not world.is_walkable(cell):
@@ -217,7 +222,8 @@ func _place_human(cell: Vector2i) -> bool:
 	return true
 
 
-## 向上查找最近的 [World] 根节点，用作新居民的父节点。
+## 向上查找最近的 [World] 根节点，用作新居民的父节点。[br]
+## 返回找到的世界根节点；不存在时返回 null。
 func _find_world_parent() -> World:
 	var node: Node = get_parent()
 	while node != null:

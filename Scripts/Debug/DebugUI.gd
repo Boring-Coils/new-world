@@ -116,7 +116,8 @@ func _build() -> void:
 	vbox.add_child(help)
 
 
-## 在 [param parent] 中创建一个发送 [param kind] 放置选择的按钮。
+## 在 [param parent] 中创建一个发送 [param kind] 放置选择的按钮。[br]
+## [param text] 是按钮显示文字。
 func _add_button(parent: GridContainer, text: String, kind: int) -> void:
 	var button := Button.new()
 	button.text = text
@@ -126,7 +127,8 @@ func _add_button(parent: GridContainer, text: String, kind: int) -> void:
 	parent.add_child(button)
 
 
-## 更新当前放置说明并发出 [signal kind_selected]。
+## 更新当前放置说明并发出 [signal kind_selected]。[br]
+## [param kind] 是 [enum PlacementController.Kind] 中的放置类型。
 func _on_button(kind: int) -> void:
 	_current_kind = kind
 	match kind:
@@ -170,12 +172,18 @@ func _on_add_waste_pressed() -> void:
 		set_hint("废料添加失败：仓库空间不足")
 
 
-## 每刻到达后刷新面板时间文本。
+## 每刻到达后刷新面板时间文本。[br]
+## [param total_ticks] 是当前全局累计刻数。[br]
+## [param day] 是当前游戏日序号。[br]
+## [param tick_of_day] 是当前游戏日内的刻序号。
 func _on_tick_advanced(total_ticks: int, day: int, tick_of_day: int) -> void:
 	_update_time(total_ticks, day, tick_of_day)
 
 
-## 格式化并显示当前游戏时间。
+## 格式化并显示当前游戏时间。[br]
+## [param total_ticks] 是当前全局累计刻数。[br]
+## [param day] 是当前游戏日序号。[br]
+## [param tick_of_day] 是当前游戏日内的刻序号。
 func _update_time(total_ticks: int, day: int, tick_of_day: int) -> void:
 	if _time_label == null:
 		return
@@ -184,13 +192,15 @@ func _update_time(total_ticks: int, day: int, tick_of_day: int) -> void:
 	]
 
 
-## 更新左上角的状态文字
+## 更新左上角的状态文字[br]
+## [param text] 是新的居民状态摘要。
 func set_stats(text: String) -> void:
 	if _stats_label != null:
 		_stats_label.text = text
 
 
-## 显示一条提示（放置成功 / 失败的原因）
+## 显示一条提示（放置成功 / 失败的原因）[br]
+## [param text] 是显示给玩家的操作提示。
 func set_hint(text: String) -> void:
 	if _hint_label != null:
 		_hint_label.text = text

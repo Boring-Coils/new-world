@@ -51,7 +51,8 @@ var employer: Building = null
 var wait_offset: Vector2 = Vector2.ZERO
 
 
-## 居民必须从场景实例化，否则会缺少 AI、Motion 和 BuffSystem。
+## 居民必须从场景实例化，否则会缺少 AI、Motion 和 BuffSystem。[br]
+## 返回从居民场景实例化出的完整居民节点。
 static func create() -> Human:
 	return load("res://Scenes/Human/Human.tscn").instantiate() as Human
 
@@ -86,7 +87,9 @@ func bind_employer(building: Building) -> void:
 	employer = building
 
 
-## 接收雇佣结束通知，清理雇主引用并让 AI 取消相关工作状态。
+## 接收雇佣结束通知，清理雇主引用并让 AI 取消相关工作状态。[br]
+## [param building] 是结束雇佣关系的建筑。[br]
+## [param reason] 是取消工作周期时记录的结束原因。
 func notify_employment_ended(building: Building, reason: String) -> void:
 	if employer == building:
 		employer = null
@@ -156,7 +159,8 @@ func relocate_out() -> void:
 	ai.request_relocation()
 
 
-## 工作站等系统通过语义接口控制居民显隐，不直接操作 HumanVisual 内部节点。
+## 工作站等系统通过语义接口控制居民显隐，不直接操作 HumanVisual 内部节点。[br]
+## [param is_visible] 指定居民模型是否应在世界中显示。
 func set_world_visibility(is_visible: bool) -> void:
 	visual.visible = is_visible
 

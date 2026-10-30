@@ -28,7 +28,10 @@ func _ready() -> void:
 	TickManager.tick_advanced.connect(_on_tick_advanced)
 
 
-## 每刻走完之后由 signal 触发（此时所有居民都已经结算过）
+## 每刻走完之后由 signal 触发（此时所有居民都已经结算过）[br]
+## [param total_ticks] 是当前全局累计刻数，用于触发固定阶段检查。[br]
+## [param _day] 是当前游戏日；自检按累计刻判断，因此不使用该值。[br]
+## [param _tick_of_day] 是当前日内刻；自检按累计刻判断，因此不使用该值。
 func _on_tick_advanced(total_ticks: int, _day: int, _tick_of_day: int) -> void:
 	# 口渴到期那一刻节点就被移除了，先趁它还活着把累计值抄出来
 	if _thirst_buff != null and is_instance_valid(_thirst_buff):
@@ -125,7 +128,9 @@ func _on_buff_expired(buff_type: GlobalEnum.BuffType, host: Human) -> void:
 	print("[BUFF] %s 的 %s 到期" % [host.name, GlobalEnum.BuffType.keys()[buff_type]])
 
 
-## 取第几个居民，越界返回 null
+## 取第几个居民，越界返回 null[br]
+## [param index] 是居民注册表中的零基索引。[br]
+## 返回对应居民实例；越界或实例已失效时返回 null。
 func _get_human(index: int) -> Human:
 	if index < 0 or index >= TickManager.humans.size():
 		return null

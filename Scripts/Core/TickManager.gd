@@ -57,7 +57,8 @@ func _ready() -> void:
 			speed_multiplier = maxf(arg.trim_prefix("--speed=").to_float(), 0.0)
 
 
-## 积累现实时间并在达到一刻的间隔时推进模拟；关闭自动走时后直接返回。
+## 积累现实时间并在达到一刻的间隔时推进模拟；关闭自动走时后直接返回。[br]
+## [param delta] 是当前帧相距上一帧的现实秒数。
 func _process(delta: float) -> void:
 	if not auto_run:
 		return
@@ -97,30 +98,35 @@ func get_tick_of_day() -> int:
 	return total_ticks % TICKS_PER_DAY
 
 
-## 登记建筑并发出一次 [signal building_registered]；重复登记不会重复加入。
+## 登记建筑并发出一次 [signal building_registered]；重复登记不会重复加入。[br]
+## [param building] 是已经成功放置并进入场景树的建筑实例。
 func register_building(building: Building) -> void:
 	if not buildings.has(building):
 		buildings.append(building)
 		building_registered.emit(building)
 
 
-## 从每刻建筑列表移除指定建筑；未登记时安全忽略。
+## 从每刻建筑列表移除指定建筑；未登记时安全忽略。[br]
+## [param building] 是要停止参与每刻更新的建筑实例。
 func unregister_building(building: Building) -> void:
 	buildings.erase(building)
 
 
-## 登记居民；重复登记不会重复加入。
+## 登记居民；重复登记不会重复加入。[br]
+## [param human] 是要加入每刻更新队列的居民实例。
 func register_human(human: Human) -> void:
 	if not humans.has(human):
 		humans.append(human)
 
 
-## 从每刻居民列表移除指定居民；未登记时安全忽略。
+## 从每刻居民列表移除指定居民；未登记时安全忽略。[br]
+## [param human] 是要停止参与每刻更新的居民实例。
 func unregister_human(human: Human) -> void:
 	humans.erase(human)
 
 
-## 返回指定建筑类型下仍有效且已登记的全部建筑。
+## 返回指定建筑类型下仍有效且已登记的全部建筑。[br]
+## [param type] 是要筛选的 [enum GlobalEnum.BuildingType] 值。
 func get_buildings_of_type(type: GlobalEnum.BuildingType) -> Array[Building]:
 	var result: Array[Building] = []
 	for b in buildings:

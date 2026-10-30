@@ -14,7 +14,8 @@ class_name GridDisplay
 @export var line_width: float = 1.0
 
 
-## 网格开启时请求每帧重绘，以跟随相机移动和缩放。
+## 网格开启时请求每帧重绘，以跟随相机移动和缩放。[br]
+## [param _delta] 是当前帧间隔；重绘由相机状态驱动，因此本方法不使用该值。
 func _process(_delta: float) -> void:
 	if show_grid:
 		queue_redraw()

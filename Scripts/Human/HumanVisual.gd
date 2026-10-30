@@ -104,7 +104,10 @@ func _apply_view() -> void:
 
 
 ## 从目录里把 idle 和 walk 的帧装进 [SpriteFrames]。[br]
-## 没做成 .tres 是为了少一个要手工维护的资源文件：目录里有什么帧就播什么。
+## [param dir] 是包含 idle 与 walk 序列帧的素材目录。[br]
+## [param walk_frames] 是期望加载的走路帧数量。[br]
+## 没做成 .tres 是为了少一个要手工维护的资源文件：目录里有什么帧就播什么。[br]
+## 返回构建完成的待机与走路动画资源。
 func _build_frames(dir: String, walk_frames: int) -> SpriteFrames:
 	var frames := SpriteFrames.new()
 	frames.remove_animation("default")
@@ -128,7 +131,8 @@ func _build_frames(dir: String, walk_frames: int) -> SpriteFrames:
 	return frames
 
 
-## 由 [Human] 连接 [signal HumanMotion.moving_changed] 后调用。
+## 由 [Human] 连接 [signal HumanMotion.moving_changed] 后调用。[br]
+## [param moving] 指定当前是否应播放走路动画。
 func set_moving(moving: bool) -> void:
 	if moving == _moving:
 		return
@@ -141,6 +145,7 @@ func set_moving(moving: bool) -> void:
 
 
 ## 由 [Human] 连接 [signal HumanMotion.facing_changed] 后调用。[br]
+## [param direction] 是当前移动方向向量，用于选择视角和镜像。[br]
 ## 斜着走时取「偏得多的那个轴」，和大多数像素游戏的习惯一致。
 func set_facing(direction: Vector2) -> void:
 	if direction.length_squared() < 0.000001:
