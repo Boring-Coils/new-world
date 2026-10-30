@@ -444,6 +444,7 @@ func build_detail() -> void:
 	if is_hireable:
 		add_section("employment", "雇佣")
 		add_row("employment", "实际工人数量", "%d / %d" % [employees.size(), max_workers])
+		add_row("employment", "可补位候选人", "%d" % get_recruitable_candidate_count())
 		add_number_input(
 			"employment",
 			"目标人数",
@@ -594,11 +595,19 @@ func can_accept_employee(human: Human) -> bool:
 		return false
 	if not is_instance_valid(human) or not human.is_inside_tree():
 		return false
-	if human.employer != null and human.employer != self:
+	if is_instance_valid(human.employer) and human.employer != self:
 		return false
 	if employees.has(human):
 		return false
 	return can_accept_age(human)
+
+
+func get_recruitable_candidate_count() -> int:
+	var count := 0
+	for human in TickManager.humans:
+		if can_accept_employee(human):
+			count += 1
+	return count
 
 
 func is_employee_eligible(human: Human) -> bool:

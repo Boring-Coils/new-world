@@ -195,11 +195,22 @@ func _is_work_goal_available() -> bool:
 
 
 func _start_wait_travel() -> bool:
-	var world_node := human.get_parent()
-	if not world_node is World:
+	var world_node := _find_world_ancestor()
+	if world_node == null:
+		push_error("%s 找不到 World，无法前往等待点" % human.name)
+		send_event(EVENT_PATH_FAILED)
 		return false
-	var wait_position: Vector2 = (world_node as World).WAIT_PLACE + human.wait_offset
+	var wait_position: Vector2 = world_node.WAIT_PLACE + human.wait_offset
 	return motion.move_to_position(wait_position)
+
+
+func _find_world_ancestor() -> World:
+	var node: Node = human.get_parent()
+	while node != null:
+		if node is World:
+			return node as World
+		node = node.get_parent()
+	return null
 
 
 func _find_target_for_goal(goal: int) -> Building:

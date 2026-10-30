@@ -339,6 +339,96 @@ func _test_employment() -> void:
 	)
 	await _dispose_tracked()
 
+	origin = _next_origin()
+	station = _create_workstation(origin, {}, {}, 1, 3)
+	var removed_employer := ScrapSortingStation.new()
+	var recovered_workers: Array[Human] = []
+	for i in range(3):
+		var recovered_worker := _spawn_human(
+			origin + Vector2i(i, 5),
+			GlobalEnum.AgeStatus.ADULT,
+			25 + i,
+		)
+		recovered_worker.employer = removed_employer
+		recovered_workers.append(recovered_worker)
+	removed_employer.free()
+	var candidates_visible := station.get_recruitable_candidate_count()
+	station.on_tick()
+	var all_reassigned := true
+	for recovered_worker in recovered_workers:
+		if recovered_worker.employer != station:
+			all_reassigned = false
+	_check(
+		"EMP-16",
+		candidates_visible == 3
+		and station.employees.size() == 3
+		and all_reassigned,
+		"失效雇主引用不阻止成年人补位",
+		"candidates=%d employees=%d" % [
+			candidates_visible,
+			station.employees.size(),
+		],
+	)
+	await _dispose_tracked()
+
+	origin = _next_origin()
+	station = _create_workstation(origin, {}, {}, 1, 3)
+	var placer := get_parent().get("_placer") as PlacementController
+	var humans_before_debug_placement := TickManager.humans.size()
+	placer.select_kind(PlacementController.Kind.HUMAN)
+	for i in range(4):
+		placer.place_at_cell(origin + Vector2i(i, 5))
+	placer.cancel()
+	var debug_humans: Array[Human] = []
+	for i in range(humans_before_debug_placement, TickManager.humans.size()):
+		debug_humans.append(TickManager.humans[i])
+	for debug_human in debug_humans:
+		_tracked_humans.append(debug_human)
+	station.on_tick()
+	var all_debug_adults := true
+	for debug_human in debug_humans:
+		if debug_human.age_status != GlobalEnum.AgeStatus.ADULT:
+			all_debug_adults = false
+	_check(
+		"EMP-17",
+		debug_humans.size() == 4
+		and all_debug_adults
+		and station.employees.size() == 3
+		and debug_humans.all(
+			func(debug_human: Human) -> bool: return debug_human.get_parent() is World
+		),
+		"调试放置 4 个成年人后目标 3 在同一刻招满",
+		"placed=%d adults=%s employees=%d" % [
+			debug_humans.size(),
+			all_debug_adults,
+			station.employees.size(),
+		],
+	)
+	var waiting_debug_human: Human = debug_humans[3]
+	waiting_debug_human.ai.force_next_decision()
+	var selected_wait: bool = waiting_debug_human.ai.try_select_idle_goal()
+	var started_wait_route: bool = waiting_debug_human.ai.start_travel_to_current_target()
+	var started_wait_motion: bool = waiting_debug_human.motion.is_moving()
+	var ai_motion_ok: bool = (
+		selected_wait
+		and waiting_debug_human.ai.get_goal() == HumanAI.Goal.WAIT
+		and started_wait_route
+		and started_wait_motion
+	)
+	waiting_debug_human.motion.stop()
+	_check(
+		"EMP-18",
+		ai_motion_ok,
+		"调试放置的居民能离开原地前往等待点",
+		"selected=%s goal=%s started=%s moving=%s" % [
+			selected_wait,
+			HumanAI.Goal.keys()[waiting_debug_human.ai.get_goal()],
+			started_wait_route,
+			started_wait_motion,
+		],
+	)
+	await _dispose_tracked()
+
 
 func _test_schedule_and_waiting() -> void:
 	TickManager.total_ticks = 599

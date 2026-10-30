@@ -20,6 +20,10 @@ enum Kind {
 ## 放成功或失败时发一句提示，给 UI 显示
 signal notice(text: String)
 
+## 调试菜单放置的居民统一使用成年年龄段
+const DEBUG_HUMAN_AGE_MIN: int = 18
+const DEBUG_HUMAN_AGE_MAX: int = 59
+
 ## 当前选中的类型
 var kind: Kind = Kind.NONE
 
@@ -181,6 +185,10 @@ func _place_human(cell: Vector2i) -> bool:
 	if not world.is_walkable(cell):
 		notice.emit("这一格是建筑或障碍，人站不进去")
 		return false
+	var world_parent := _find_world_parent()
+	if world_parent == null:
+		notice.emit("找不到世界根节点，无法放置居民")
+		return false
 
 	# 同一格已经站了人的话不给放，否则两个人会叠在一起（画面看起来「少人」）
 	for other in TickManager.humans:
@@ -192,21 +200,22 @@ func _place_human(cell: Vector2i) -> bool:
 	human.name = "居民%d" % (TickManager.humans.size() + 1)
 	human.position = world.cell_to_world(cell)
 
-	# 随机年龄，三种年龄段轮着来
-	match randi() % 3:
-		0:
-			human.age_status = GlobalEnum.AgeStatus.CHILD
-			human.age = randi_range(6, 17)
-		1:
-			human.age_status = GlobalEnum.AgeStatus.ADULT
-			human.age = randi_range(18, 59)
-		2:
-			human.age_status = GlobalEnum.AgeStatus.OLD
-			human.age = randi_range(60, 85)
+	# 调试放置用于稳定验证雇佣和工作链路，统一生成成年人。
+	human.age_status = GlobalEnum.AgeStatus.ADULT
+	human.age = randi_range(DEBUG_HUMAN_AGE_MIN, DEBUG_HUMAN_AGE_MAX)
 
-	add_child(human)
-	notice.emit("%s 已放下（%s）" % [human.name, cell])
+	world_parent.add_child(human)
+	notice.emit("%s 已放下（成年，%s）" % [human.name, cell])
 	return true
+
+
+func _find_world_parent() -> World:
+	var node: Node = get_parent()
+	while node != null:
+		if node is World:
+			return node as World
+		node = node.get_parent()
+	return null
 
 
 # ---------------------------------------------------------------------------

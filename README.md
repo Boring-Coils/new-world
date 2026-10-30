@@ -106,7 +106,7 @@ godot --headless --path . --scene res://Scenes/TestScene.tscn -- --autoplace --s
 godot --headless --path . --scene res://Scenes/TestScene.tscn -- --bufftest --speed=20 --max-ticks=140
 ```
 
-完整验收覆盖 15 个雇佣、7 个班次/等待、16 个工作周期、19 个库存、10 个清算
+完整验收覆盖 18 个雇佣、7 个班次/等待、18 个工作周期、19 个库存、10 个清算
 和 7 个 UI 契约检查。命令退出码为 0 只代表进程结束，仍需确认
 `[ACCEPT] SUMMARY` 的失败数为 0，并检查 `SCRIPT ERROR`、未预期警告和日志中的不变量。
 
