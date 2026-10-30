@@ -1,58 +1,67 @@
+## 集成测试场景。[br]
+## 在 [World] 基础设施上创建取水、取食、工作站和仓库，并生成不同年龄居民验证完整模拟循环。[br]
+## 自动放置、Buff 自检、完整验收、截图和 UI 演示等调试入口只允许保留在测试场景。
 extends World
-
-## 测试场景：在 [World] 的空世界（相机 + 网格）之上，摆一个取水站、一个取食站、[br]
-## 一个废料分拣站，再放一群人，用来验证网格寻路、每刻消耗、补水补食和上班进站这一整套循环。[br]
-## [b]只有调试用的东西[/b]（统计面板、自动放置断言、buff 自检）允许留在这里；[br]
-## 真正的游戏规则请放 Colony 那一层。
 
 ## 放多少个居民
 const HUMAN_COUNT: int = 8
 
 ## 建筑摆在世界中心附近（格坐标，左上角）
 const WATER_ORIGIN := Vector2i(464, 492)
+
+## 取食站初始左上角格子。
 const FOOD_ORIGIN := Vector2i(469, 492)
+
+## 废料分拣站初始左上角格子。
 const WORK_ORIGIN := Vector2i(474, 492)
+
+## 仓库初始左上角格子。
 const WAREHOUSE_ORIGIN := Vector2i(481, 492)
 
 ## 人散落在这个矩形范围内（格坐标，含两端）
 const HUMAN_SPAWN_MIN := Vector2i(466, 496)
+
+## 居民出生范围右下角（含），与 [constant HUMAN_SPAWN_MIN] 共同定义闭区间。
 const HUMAN_SPAWN_MAX := Vector2i(470, 498)
 
-## 左上角的调试面板
+# 左上角的调试面板实例。
 var _debug_ui: DebugUI
 
-## 放置控制器
+# 测试场景的放置控制器实例。
 var _placer: PlacementController
 
-## 调试用：跑到这一刻数就打印统计并退出（0 表示不启用）
+# 自动退出前运行的模拟刻数；0 表示不启用。
 var _max_ticks: int = 0
 
-## 调试用：上一次打印统计的刻数
+# 上一次打印模拟统计时的累计刻数。
 var _last_report_tick: int = 0
 
-## 调试用：截一张图存到这个路径（空表示不截）
+# 截图输出路径；空字符串表示不截图。
 var _shot_path: String = ""
 
-## 调试用：是否已经截图
+# 本次运行是否已经执行截图。
 var _shot_done: bool = false
 
-## 调试用：启动后自动放一套建筑和居民，验证放置链路
+# 是否启用自动放置链路检查。
 var _autoplace: bool = false
 
-## 调试用：buff 自检（--bufftest），具体逻辑在 [BuffSelfTest]
+# 是否启用 [BuffSelfTest]。
 var _bufftest: bool = false
 
-## 调试用：运行 v0.0.1.4 完整验收自检（--acceptance）。
+# 是否启用完整验收自检。
 var _acceptance: bool = false
 
-## 调试用：打开指定详情页做 UI 截图检查（--ui-demo=work/warehouse）。
+# UI 演示目标；空字符串表示关闭。
 var _ui_demo: String = ""
 
-## 集成场景中的核心建筑，验收自检和调试统计会读取它们。
+## 集成场景中的废料分拣站，供验收和详情演示使用。
 var scrap_sorting_station: ScrapSortingStation = null
+
+## 集成场景中的公共仓库，供验收和详情演示使用。
 var warehouse: Warehouse = null
 
 
+## 解析测试参数、初始化世界与测试设施，并按参数挂载调试自检节点。
 func _ready() -> void:
 	_parse_early_args()
 	randomize()
@@ -80,15 +89,18 @@ func _ready() -> void:
 		add_child(acceptance)
 
 
+## 在创建测试设施前解析必须提前生效的验收参数。
 func _parse_early_args() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg == "--acceptance":
 			_acceptance = true
 
 
+## 放置测试用取水站、取食站、工作站和仓库，并填充初始物资。
 func _setup_buildings() -> void:
 	var world := WorldGridGlobal.world
 
+	# 先创建补给站，保证居民后续能够形成取水和取食行为。
 	var water := WaterStation.new()
 	water.name = water.display_name
 	add_child(water)
@@ -101,6 +113,7 @@ func _setup_buildings() -> void:
 	if not food.place_at(world, FOOD_ORIGIN):
 		push_error("%s 放不下" % food.display_name)
 
+	# 工作站和仓库保留为字段，供验收、统计和 UI 演示重复读取。
 	scrap_sorting_station = ScrapSortingStation.new()
 	scrap_sorting_station.name = scrap_sorting_station.display_name
 	add_child(scrap_sorting_station)
@@ -126,6 +139,7 @@ func _setup_buildings() -> void:
 		})
 
 
+## 在出生范围内生成不同年龄阶段的居民，并避免重复占用同一格。
 func _setup_humans() -> void:
 	var world := WorldGridGlobal.world
 	var used_cells: Array[Vector2i] = []
@@ -172,6 +186,7 @@ func _pick_free_cell(used_cells: Array[Vector2i]) -> Vector2i:
 	return Vector2i(-1, -1)
 
 
+## 创建调试 UI 与放置控制器之间的信号连接，并解析剩余测试参数。
 func _setup_ui() -> void:
 	_debug_ui = DebugUI.new()
 	_debug_ui.name = "DebugUI"
@@ -201,6 +216,7 @@ func _setup_ui() -> void:
 				_placer.debug_hover_cell = Vector2i(parts[0].to_int(), parts[1].to_int())
 
 
+## 打开参数指定的建筑详情页，并把建筑预览固定到截图位置。
 func _open_ui_demo() -> void:
 	var panel := get_node_or_null("BuildingDetailPanel") as BuildingDetailPanel
 	if panel == null:
@@ -300,16 +316,19 @@ func _auto_test_placement() -> void:
 	])
 
 
+## 创建测试场景使用的放置控制器。
 func _setup_placement() -> void:
 	_placer = PlacementController.new()
 	_placer.name = "Placement"
 	add_child(_placer)
 
 
+## 把调试 UI 的建造选择转发给放置控制器。
 func _on_kind_selected(kind: int) -> void:
 	_placer.select_kind(kind)
 
 
+## 每帧刷新居民状态统计，处理截图、周期日志和自动退出。
 func _process(_delta: float) -> void:
 	if _debug_ui == null:
 		return
@@ -343,6 +362,7 @@ func _process(_delta: float) -> void:
 					_:
 						idle += 1
 
+	# 调试面板按动作状态和目标共同归类，工作与脱困状态优先于目标类别。
 	_debug_ui.set_stats("取水 %d   取食 %d\n上班路上 %d   站内 %d\n脱困 %d   空闲 %d" % [
 		at_water, at_food, going_work, inside_work, relocating, idle
 	])

@@ -1,8 +1,8 @@
+## 世界网格的帧级可视层。[br]
+## 根据当前相机的可见矩形只绘制屏幕范围内的网格线，避免遍历整个世界。[br]
+## 本类只负责表现，不修改格子的通行状态或寻路数据。
 extends Node2D
 class_name GridDisplay
-
-## 网格显示：在地图上画出和 [WorldGrid] 完全对齐的白色细线。[br]
-## 只画摄像机看得到的那一块，不然 1000 × 1000 格全画出来会糊成一片白。
 
 ## 是否显示网格（默认开）
 @export var show_grid: bool = true
@@ -14,11 +14,13 @@ class_name GridDisplay
 @export var line_width: float = 1.0
 
 
+## 网格开启时请求每帧重绘，以跟随相机移动和缩放。
 func _process(_delta: float) -> void:
 	if show_grid:
 		queue_redraw()
 
 
+## 绘制当前视口覆盖范围内的网格线，并按相机缩放补偿线宽。
 func _draw() -> void:
 	if not show_grid:
 		return

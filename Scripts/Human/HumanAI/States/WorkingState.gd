@@ -1,17 +1,20 @@
+## 居民在工作站内部执行工作周期的状态。[br]
+## 进入时登记站内占用并启动工作周期，每刻处理硬中断和周期结算结果。
 extends HumanStateBase
 
-## 工作站内状态：进入时登记占用，每刻检查工作闸门和生存中断。
 
-
+## 返回工作状态的稳定键。
 func _state_key() -> StringName:
 	return &"working"
 
 
+## 进入工作时检查工作许可并启动周期，失败则取消。
 func _on_enter() -> void:
 	if not _controller.is_work_allowed() or not _controller.begin_work_cycle():
 		_send(HumanAI.EVENT_WORK_CANCELLED)
 
 
+## 每刻处理工作中断，再推进工作周期直到完成或取消。
 func _on_step() -> void:
 	match _controller.evaluate_work_interrupt():
 		HumanAI.WorkInterrupt.NONE:

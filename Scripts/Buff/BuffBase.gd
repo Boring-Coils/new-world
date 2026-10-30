@@ -1,12 +1,9 @@
+## 所有 Buff 的抽象基类。[br]
+## 子类通过覆盖效果钩子实现具体规则，并在 [member BuffSystem.REGISTRY] 登记后才能创建。[br]
+## 持续时间、重复添加和每刻推进由 [BuffSystem] 统一管理；速度与消耗倍率由系统汇总相乘。[br]
+## 所有效果接口默认不改变居民状态，只有确实需要生效时子类才覆盖对应方法。
 extends Node
 class_name BuffBase
-
-## 所有 buff 的基类。[br]
-## 新增一种 buff：继承本类 → 覆盖自己关心的钩子 → 在 [member BuffSystem.REGISTRY] 里登记脚本。[br]
-## [b]时长不归 buff 自己管[/b]：[member duration] 由 [BuffSystem] 每刻扣减，扣到 0 自动移除，[br]
-## 所以写 buff 的时候只关心「效果」和「到期时要不要收尾」，不用自己数刻。[br]
-## 所有影响居民的接口默认都是「不生效」：闸门返回 [code]true[/code]，倍率返回 [code]1.0[/code]。[br]
-## 只有确实要改的那一个才覆盖，这样 [BuffSystem] 汇总时不用按类型分支。
 
 ## 这个 buff 的类型，由 [method setup] 写入
 var buff_type: GlobalEnum.BuffType = GlobalEnum.BuffType.FATIGUE

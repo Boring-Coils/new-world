@@ -1,32 +1,29 @@
+## Buff 链路的无头自检节点。[br]
+## 在固定刻数添加疲劳、眩晕和口渴，检查层数、倍率、工作闸门、逐刻扣水与自动到期。[br]
+## 自检只输出期望值与实际值，通过测试场景的 [code]--bufftest[/code] 参数启用。
 extends Node
 class_name BuffSelfTest
 
-## buff 链路的自检节点（调试用，测完可连同本文件一起删）。[br]
-## 挂在场景里就会接 [signal TickManager.tick_advanced]，到固定刻数加 buff 并打印「期望 vs 实际」。[br]
-## 覆盖四件事：数值倍率（疲劳）、行为闸门（眩晕）、每刻逻辑（口渴）、重复添加与自动到期。[br]
-## 速度用「反推随机偏移」来验倍率：居民 1 是儿童，基础速度算得出来，[br]
-## 反推值落回 0.9~1.1 就说明倍率确实乘上去了。[br]
-## 用法：[code]godot --headless --path . Scenes/TestScene.tscn -- --speed=20 --bufftest --max-ticks=140[/code]
-
-## 已经加过 buff 了没有
+# 是否已经执行初始 Buff 添加。
 var _applied: bool = false
 
-## 到期检查做过了没有
+# 是否已经执行口渴到期检查。
 var _expiry_checked: bool = false
 
-## 最终检查做过了没有
+# 是否已经执行最终倍率与闸门检查。
 var _final_checked: bool = false
 
-## 口渴 buff 的引用：它到期被移除后，节点这一帧仍然可读，用来抄累积扣水量
+# 口渴 Buff 的临时引用，用于在移除前后读取累计扣水量。
 var _thirst_buff: Thirst = null
 
-## 口渴 buff 最后一次读到的累计扣水量
+# 口渴 Buff 最后记录到的累计额外扣水量。
 var _thirst_total: float = 0.0
 
-## 眩晕期间有没有人还跑去上班（应该始终 false）
+# 眩晕期间是否检测到居民仍选择工作目标。
 var _stun_violation: bool = false
 
 
+## 订阅每刻完成信号，等待固定刻数执行自检。
 func _ready() -> void:
 	TickManager.tick_advanced.connect(_on_tick_advanced)
 
@@ -123,6 +120,7 @@ func _check_final() -> void:
 	print("[BUFF] 眩晕期间跑去上班=%s（期望 false）" % _stun_violation)
 
 
+## 打印 [param host] 的 [param buff_type] 到期日志。
 func _on_buff_expired(buff_type: GlobalEnum.BuffType, host: Human) -> void:
 	print("[BUFF] %s 的 %s 到期" % [host.name, GlobalEnum.BuffType.keys()[buff_type]])
 

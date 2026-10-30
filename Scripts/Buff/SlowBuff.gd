@@ -1,9 +1,8 @@
+## 减速型 Buff 的共用基类。[br]
+## 按“每层减速比例 × 层数”计算线性衰减，并用 [constant MIN_SPEED_MULTIPLIER] 保底；[br]
+## 子类只需读取 [member slow] 参数，即可通过 [method get_speed_multiplier] 获得统一效果。
 extends BuffBase
 class_name SlowBuff
-
-## 减速型 buff 的共用基类：「每层线性衰减 + 保底倍率」这一条规则只写在这里。[br]
-## 子类只需要在 [method apply] 里把参数读进 [member slow]，效果就自动有了，[br]
-## 想再改「走多慢」的算法（比如改成指数衰减），改本类一处即可。
 
 ## 速度倍率的保底值：叠太多层也不至于原地卡死
 const MIN_SPEED_MULTIPLIER: float = 0.1
@@ -27,5 +26,6 @@ func reapply(params: Dictionary) -> void:
 		slow = maxf(slow, clampf(float(params["slow"]), 0.0, 1.0))
 
 
+## 返回按当前层数计算并经过保底限制的移动速度倍率。
 func get_speed_multiplier() -> float:
 	return maxf(1.0 - slow * float(stacks), MIN_SPEED_MULTIPLIER)

@@ -1,16 +1,8 @@
+## 游戏时钟、实体注册表和每刻更新的唯一调度入口。[br]
+## 自动走时按现实时间累积，但建筑、居民、消耗和 Buff 都只在实际模拟刻推进。[br]
+## 每刻固定先更新建筑、再更新居民，最后广播 [signal tick_advanced] 与跨天信号。[br]
+## 周期逻辑必须通过注册接口或实体自身的 [code]on_tick()[/code] 接入，不能另建 [code]_process[/code] 循环。
 extends Node
-
-## 游戏时钟与每刻更新调度。[br]
-## 时间换算：[br]
-## - 现实 1 秒 = [constant TICKS_PER_SECOND] 刻[br]
-## - 游戏内 1 天 = [constant TICKS_PER_DAY] 刻 = 6 小时[br]
-## - 所以游戏内 1 刻 = 21600 ÷ 1800 = [constant GAME_SECONDS_PER_TICK] 游戏秒（12 秒）[br]
-## [b]所有和「人」有关的速度、消耗都要按游戏内时间算，不是现实时间。[/b][br]
-## 例如成年人走路 1.4 米/秒、1 格 = 1 米，那么每刻能走 1.4 × 12 ≈ 17 格（17 米），[br]
-## 一天走三十公里。一天分多少刻直接决定「一刻走多远」，改这里要连补给提前量一起看。[br]
-## 每个刻按固定顺序更新一次：先建筑、再人物，最后广播 [signal tick_advanced]。[br]
-## 所有需要「每刻更新」的东西都通过 [method register_building] / [method register_human] 登记，[br]
-## 不要自己再连 _process，否则更新顺序不可控。
 
 ## 一天有多少刻
 const TICKS_PER_DAY: int = 1800
@@ -53,10 +45,11 @@ var buildings: Array[Building] = []
 ## 已登记的居民（每刻后更新这些）
 var humans: Array[Human] = []
 
-## 内部的时间累加器
+# 内部现实时间累加器，用于补齐跨帧的模拟刻。
 var _accumulator: float = 0.0
 
 
+## 在自动加载节点就绪时读取可选的 [code]--speed=[/code] 用户参数。
 func _ready() -> void:
 	# 调试用：命令行加 `-- --speed=100` 可以让时间快进，方便观察群体行为
 	for arg in OS.get_cmdline_user_args():
@@ -64,6 +57,7 @@ func _ready() -> void:
 			speed_multiplier = maxf(arg.trim_prefix("--speed=").to_float(), 0.0)
 
 
+## 积累现实时间并在达到一刻的间隔时推进模拟；关闭自动走时后直接返回。
 func _process(delta: float) -> void:
 	if not auto_run:
 		return
@@ -78,8 +72,7 @@ func _process(delta: float) -> void:
 func advance_tick() -> void:
 	total_ticks += 1
 
-	# 先建筑、再人物：建筑在这一刻更新自己的状态（比如出入口占用），
-	# 人物随后读取到的就是最新状态
+	# 先建筑、再人物：居民读取到的就是建筑本刻更新后的最新状态。
 	for b in buildings:
 		if is_instance_valid(b):
 			b.on_tick()
@@ -92,42 +85,42 @@ func advance_tick() -> void:
 		day_advanced.emit(get_day())
 
 
-## 当前是第几天（从 0 开始）
+## 返回当前游戏日序号，从 0 开始。
 func get_day() -> int:
-	#显式忽略警告
+	# 整数除法是刻数换算游戏日的预期行为。
 	@warning_ignore("integer_division")
 	return total_ticks / TICKS_PER_DAY
 
 
-## 当前是当天的第几刻（0 ~ 1799）
+## 返回当前游戏日内的刻序号，范围为 0 至 [constant TICKS_PER_DAY] - 1。
 func get_tick_of_day() -> int:
 	return total_ticks % TICKS_PER_DAY
 
 
-## 登记一个建筑
+## 登记建筑并发出一次 [signal building_registered]；重复登记不会重复加入。
 func register_building(building: Building) -> void:
 	if not buildings.has(building):
 		buildings.append(building)
 		building_registered.emit(building)
 
 
-## 注销一个建筑
+## 从每刻建筑列表移除指定建筑；未登记时安全忽略。
 func unregister_building(building: Building) -> void:
 	buildings.erase(building)
 
 
-## 登记一个居民
+## 登记居民；重复登记不会重复加入。
 func register_human(human: Human) -> void:
 	if not humans.has(human):
 		humans.append(human)
 
 
-## 注销一个居民
+## 从每刻居民列表移除指定居民；未登记时安全忽略。
 func unregister_human(human: Human) -> void:
 	humans.erase(human)
 
 
-## 按类型找出所有还活着的建筑
+## 返回指定建筑类型下仍有效且已登记的全部建筑。
 func get_buildings_of_type(type: GlobalEnum.BuildingType) -> Array[Building]:
 	var result: Array[Building] = []
 	for b in buildings:

@@ -1,13 +1,9 @@
+## 单个居民身上的 Buff 管理器。[br]
+## 负责按 [member REGISTRY] 创建、重复添加、每刻计时、移除和效果汇总，不包含具体 Buff 规则。[br]
+## 工作闸门对全部 Buff 取逻辑与，速度、消耗和目标权重倍率分别相乘。[br]
+## 本类不直接打印或修改 UI，只通过信号通知添加与到期事件。
 extends Node
 class_name BuffSystem
-
-## 每个居民身上挂一个，负责 buff 的「增删查」和「汇总」。[br]
-## 它自己不知道任何 buff 的具体逻辑：类型 → 脚本的对应关系全在 [member REGISTRY] 里，[br]
-## 效果一律问各个 buff，本类只做三件事：[br]
-## - 添加：没有就实例化，有就交给那个 buff 自己决定怎么叠（[method BuffBase.reapply]）[br]
-## - 倒计时：每刻扣 [member BuffBase.duration]，扣到 0 自动移除[br]
-## - 汇总：闸门取「与」、倍率相乘，供 [Human] / [HumanAI] 直接读[br]
-## 本类[b]不打印、不碰 UI[/b]：添加和到期只发 signal，谁想看谁连。
 
 ## 新 buff 生效（不管是新建还是复用）时发出
 signal buff_added(buff_type: GlobalEnum.BuffType)
@@ -50,6 +46,7 @@ func add_buff(type: GlobalEnum.BuffType, params: Dictionary = {}) -> BuffBase:
 
 	var exist := get_buff(type)
 	if exist != null:
+		# 重复添加交给具体 Buff 决定叠层、刷新或忽略。
 		exist.reapply(params)
 		buff_added.emit(type)
 		return exist
@@ -64,6 +61,7 @@ func add_buff(type: GlobalEnum.BuffType, params: Dictionary = {}) -> BuffBase:
 		push_error("[BuffSystem] %s 的脚本没有 extends BuffBase" % type)
 		return null
 
+	# 新实例先绑定宿主，再进入场景树并应用初始化参数，确保 apply 能访问 Human。
 	buff.setup(type, target_human)
 	add_child(buff)
 	buff.apply(params)

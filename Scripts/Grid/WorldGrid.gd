@@ -1,19 +1,9 @@
+## 世界网格与寻路服务。[br]
+## 把世界切分为固定像素尺寸的正方形格子，并基于 [AStarGrid2D] 计算八方向路径。[br]
+## 除名称含 [code]world[/code] 的接口外，参数和返回值均为格子坐标而非像素坐标。[br]
+## 斜向移动只在两侧格均可通行时允许，避免角色穿越墙角。
 extends RefCounted
 class_name WorldGrid
-
-## 世界网格寻路工具。[br]
-## 把整个游戏世界均匀切成固定大小的正方形格子，并基于 [AStarGrid2D] 提供 A* 寻路能力。[br]
-## [b]坐标约定（非常重要）：[/b][br]
-## - 世界每格边长为 [constant CELL_SIZE] 像素，[code](0, 0)[/code] 表示左上角第一格。[br]
-## - 本类所有对外函数接收 / 返回的坐标，除名字里带 "world" 的以外，[br]
-##   一律为格子坐标（[code]Vector2i[/code]，即第几列、第几行），而不是像素坐标。[br]
-## [b]典型用法：[/b][br]
-## [codeblock]
-## var grid := WorldGrid.new(Vector2i(200, 150))   # 世界共 200 列 × 150 行
-## grid.set_walkable(Vector2i(3, 4), false)        # 把 (3, 4) 设为墙，不可走
-## grid.set_walk_cost(Vector2i(4, 4), 0.5)         # 把 (4, 4) 设为「更好走」
-## var path := grid.get_path(Vector2i(0, 0), Vector2i(20, 10))
-## [/codeblock]
 
 
 ## 每个格子的边长（像素）。世界就是被切成这种大小的方块。
@@ -22,10 +12,10 @@ const CELL_SIZE: float = 10.0
 ## 默认的通行代价，[code]1.0[/code] 表示普通地面。
 const DEFAULT_WALK_COST: float = 1.0
 
-## 底层使用的 A* 网格
+# 底层使用的 A* 网格。
 var _astar: AStarGrid2D
 
-## 世界共有多少格（横向 × 纵向）
+# 世界共有多少格（横向 × 纵向）。
 var _cells: Vector2i
 
 

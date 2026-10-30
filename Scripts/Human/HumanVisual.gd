@@ -1,11 +1,8 @@
+## 居民序列帧表现组件。[br]
+## 每个颜色预设包含 side、down、up 三个视角；朝左通过水平镜像 side 视角得到。[br]
+## 组件只处理素材、动画与朝向，不参与寻路或行为决策。
 extends Node2D
 class_name HumanVisual
-
-## 居民外观：Blender 渲染出来的 2D 序列帧。[br]
-## 每个颜色预设下有 [b]三个视角[/b]：side（朝右）、down（朝下/面向镜头）、up（朝上/背面）。[br]
-## 「朝左」不是单独渲染的，用 [member AnimatedSprite2D.flip_h] 把 side 镜像过去。[br]
-## [b]颜色只能是预设里的几种[/b]：每多一种颜色就要在 Blender 里重渲三套图，[br]
-## 所以这里用 [member outfit] 指定「哪一套」，而不是让外面传一个 RGB 进来。
 
 ## 预设表：枚举 → 素材根目录 + 走路帧数。[br]
 ## 目录结构：<根目录>/side/、down/、up/，每个里面是 idle_0.png + walk_0..7.png。[br]
@@ -20,8 +17,8 @@ const PRESETS := {
 ## 素材里固定有三个视角，顺序无所谓，名字必须对上目录名
 const VIEWS: Array[String] = ["side", "down", "up"]
 
-## 128 px 的贴图缩到 0.08，正好让小人约 8 个世界单位高（和原来的白模一致，
-## 脚底落在 y ≈ +4 的位置）
+## 序列帧缩放比例，使 128 像素贴图约为 8 个世界单位高。[br]
+## 该比例同时保持脚底靠近节点原点下方约 4 像素的位置。
 const SPRITE_SCALE: float = 0.08
 
 ## 走路动画的播放速度（帧/秒），和 Blender 里 12 fps 对齐
@@ -29,10 +26,14 @@ const WALK_FPS: float = 12.0
 
 ## 朝向
 enum Facing {
-	RIGHT, ## 朝右（side 不镜像）
-	LEFT,  ## 朝左（side 镜像）
-	DOWN,  ## 朝下（down 视角）
-	UP,    ## 朝上（up 视角）
+	## 朝右，使用不镜像的 side 视角。
+	RIGHT,
+	## 朝左，使用水平镜像的 side 视角。
+	LEFT,
+	## 朝下，使用 down 视角。
+	DOWN,
+	## 朝上，使用 up 视角。
+	UP,
 }
 
 ## 当前用的是哪一套颜色
@@ -42,19 +43,20 @@ enum Facing {
 		if _sprite != null:
 			_apply_outfit()
 
-## 精灵本体
+# 当前运行时创建的动画精灵。
 var _sprite: AnimatedSprite2D
 
-## 视角名 → 已经装好的帧。换朝向时只是换一份引用，不重新加载贴图
+# 视角名到已构建帧资源的映射，切换朝向时只替换引用。
 var _frames: Dictionary = {}
 
-## 当前朝向，默认朝右
+# 当前朝向，默认朝右。
 var _facing: Facing = Facing.RIGHT
 
-## 当前是不是在走路，避免每刻重复 play
+# 当前是否正在播放走路动画，用于避免重复启动动画。
 var _moving: bool = false
 
 
+## 创建动画精灵并加载当前服装预设的全部视角帧。
 func _ready() -> void:
 	_sprite = AnimatedSprite2D.new()
 	_sprite.name = "Sprite"
@@ -72,6 +74,7 @@ func _apply_outfit() -> void:
 		push_warning("HumanVisual：没有登记这个颜色的素材 %s" % outfit)
 		return
 
+	# 三个视角共享同一套服装预设，只在切换朝向时替换 SpriteFrames 引用。
 	_frames.clear()
 	for view in VIEWS:
 		_frames[view] = _build_frames(preset["dir"] + view + "/", preset["walk_frames"])
@@ -82,6 +85,7 @@ func _apply_outfit() -> void:
 func _apply_view() -> void:
 	var view := "side"
 	var flip := false
+	# 左向没有单独素材，复用 side 并开启水平镜像。
 	match _facing:
 		Facing.LEFT:
 			view = "side"
@@ -115,6 +119,7 @@ func _build_frames(dir: String, walk_frames: int) -> SpriteFrames:
 	frames.add_animation("walk")
 	frames.set_animation_loop("walk", true)
 	frames.set_animation_speed("walk", WALK_FPS)
+	# 目录中缺失的帧直接跳过，允许素材按实际文件数量逐步补齐。
 	for i in range(walk_frames):
 		var texture := load("%swalk_%d.png" % [dir, i]) as Texture2D
 		if texture != null:

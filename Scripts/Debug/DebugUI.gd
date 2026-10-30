@@ -1,8 +1,8 @@
+## 测试场景的调试面板。[br]
+## 显示时间、居民状态和放置提示，并把建造选择与调试补给操作转发给其他系统。[br]
+## 面板不直接提交建筑放置，实际放置由 [PlacementController] 完成。
 extends CanvasLayer
 class_name DebugUI
-
-## 调试面板：显示时间 / 居民状态，并提供放置和调试补给操作。[br]
-## 真正放东西的是 [PlacementController]；随机补给只修改独立仓库库存。
 
 ## 选中了要放什么（值是 [enum PlacementController.Kind]）
 signal kind_selected(kind: int)
@@ -10,28 +10,30 @@ signal kind_selected(kind: int)
 ## 每次调试补给向随机独立仓库添加的废料数量
 const WAREHOUSE_WASTE_BATCH: int = 100
 
-## 时间文字（第几天、当天第几刻、累计刻数）
+# 显示游戏日、日内刻与累计刻数的文本。
 var _time_label: Label
 
-## 居民状态文字（各状态人数）
+# 显示居民状态统计的文本。
 var _stats_label: Label
 
-## 当前放置模式的说明
+# 显示当前放置模式的文本。
 var _mode_label: Label
 
-## 放下 / 失败的提示
+# 显示放置或调试操作结果的提示文本。
 var _hint_label: Label
 
-## 当前选中的类型
+# 当前选中的放置类型。
 var _current_kind: int = PlacementController.Kind.NONE
 
 
+## 创建调试控件并订阅每刻时间更新。
 func _ready() -> void:
 	_build()
 	TickManager.tick_advanced.connect(_on_tick_advanced)
 	_update_time(TickManager.total_ticks, TickManager.get_day(), TickManager.get_tick_of_day())
 
 
+## 构建时间、状态、建造按钮、补给按钮和操作提示界面。
 func _build() -> void:
 	var panel := PanelContainer.new()
 	panel.position = Vector2(12, 12)
@@ -79,6 +81,7 @@ func _build() -> void:
 	grid.add_theme_constant_override("v_separation", 6)
 	vbox.add_child(grid)
 
+	# 建造按钮只发出模式选择，真实放置交给 PlacementController。
 	_add_button(grid, "无限取水站", PlacementController.Kind.WATER)
 	_add_button(grid, "无限取食站", PlacementController.Kind.FOOD)
 	_add_button(grid, "废料分拣站", PlacementController.Kind.WORK)
@@ -113,6 +116,7 @@ func _build() -> void:
 	vbox.add_child(help)
 
 
+## 在 [param parent] 中创建一个发送 [param kind] 放置选择的按钮。
 func _add_button(parent: GridContainer, text: String, kind: int) -> void:
 	var button := Button.new()
 	button.text = text
@@ -122,6 +126,7 @@ func _add_button(parent: GridContainer, text: String, kind: int) -> void:
 	parent.add_child(button)
 
 
+## 更新当前放置说明并发出 [signal kind_selected]。
 func _on_button(kind: int) -> void:
 	_current_kind = kind
 	match kind:
@@ -140,9 +145,11 @@ func _on_button(kind: int) -> void:
 	kind_selected.emit(kind)
 
 
+## 向随机一个仍可容纳调试废料批次的独立仓库添加废料。
 func _on_add_waste_pressed() -> void:
 	var items := {MaterialTypes.ItemType.WASTE: WAREHOUSE_WASTE_BATCH}
 	var candidates: Array[Building] = []
+	# 只选择仍有足够空间的已放置仓库，避免批量补给在失败分支中丢失。
 	for building in TickManager.get_buildings_of_type(GlobalEnum.BuildingType.WAREHOUSE):
 		if (
 			is_instance_valid(building)
@@ -163,10 +170,12 @@ func _on_add_waste_pressed() -> void:
 		set_hint("废料添加失败：仓库空间不足")
 
 
+## 每刻到达后刷新面板时间文本。
 func _on_tick_advanced(total_ticks: int, day: int, tick_of_day: int) -> void:
 	_update_time(total_ticks, day, tick_of_day)
 
 
+## 格式化并显示当前游戏时间。
 func _update_time(total_ticks: int, day: int, tick_of_day: int) -> void:
 	if _time_label == null:
 		return

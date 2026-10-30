@@ -1,32 +1,55 @@
+## v0.0.1.4 完整验收自检器。[br]
+## 依序覆盖雇佣、班次等待、工作周期、库存账本、清理、UI 契约和真实模拟集成检查。[br]
+## 每个验收 ID 只输出一次 PASS/FAIL，最终检查物资锁与预留均无悬空。
 extends Node
 class_name AcceptanceSelfTest
 
-## v0.0.1.4 验收自检。每个验收 ID 都只输出一次 PASS/FAIL，
-## 最后运行真实模拟并检查物资账本、锁和预留没有悬空。
-
+# 已执行的验收项总数。
 var _total: int = 0
+
+# 已通过的验收项数量。
 var _passed: int = 0
+
+# 失败验收项的 ID 列表。
 var _failures: Array[String] = []
+
+# 验收期间创建、需要统一销毁的建筑。
 var _tracked_buildings: Array[Building] = []
+
+# 验收期间创建、需要统一销毁的居民。
 var _tracked_humans: Array[Human] = []
+
+# 用于隔离库存测试的虚拟建筑所有者。
 var _virtual_owners: Array[Building] = []
+
+# 验收前被暂停、结束后需要恢复的居民。
 var _suspended_humans: Array[Human] = []
+
+# 验收期间临时注销、结束后需要恢复的仓库库存。
 var _suspended_inventories: Array[Inventory] = []
+
+# 验收测试设施的递增布局序号。
 var _fixture_index: int = 0
+
+# 验收开始前的全局累计刻数，用于结束后恢复时间。
 var _original_tick: int = 0
 
 
+## 延迟启动完整验收流程，确保测试场景节点已经进入场景树。
 func _ready() -> void:
 	call_deferred("_run")
 
 
+## 执行全部验收分组、恢复外部测试状态并输出最终汇总。
 func _run() -> void:
+	# 暂停自动走时并隔离现有场景实体，确保每组测试只观察自己创建的设施。
 	TickManager.auto_run = false
 	_original_tick = TickManager.total_ticks
 	_suspend_existing_humans()
 	_suspend_existing_warehouses()
 	await get_tree().process_frame
 
+	# 各分组按依赖顺序执行；清理组结束后再验证 UI 与真实模拟集成。
 	await _test_employment()
 	await _test_schedule_and_waiting()
 	await _test_work_cycles()
@@ -70,6 +93,8 @@ func _run() -> void:
 	get_tree().quit(0 if _failures.is_empty() else 1)
 
 
+## 记录并输出一个验收项的结果。[br]
+## [param case_id] 是稳定验收 ID，[param condition] 决定 PASS/FAIL，[param expected] 与 [param actual] 用于诊断。
 func _check(
 	case_id: String,
 	condition: bool,
@@ -85,7 +110,9 @@ func _check(
 		print("[ACCEPT] FAIL %-8s expected=%s actual=%s" % [case_id, expected, actual])
 
 
+## 验证雇佣资格、目标人数调整、失效雇员处理和调试居民生成。
 func _test_employment() -> void:
+	# 雇佣组覆盖目标人数、年龄资格、唯一雇主、失效关系和调试放置。
 	var origin := _next_origin()
 	var station := _create_workstation(origin, {}, {}, 1, 3)
 	var adults := [
@@ -430,7 +457,9 @@ func _test_employment() -> void:
 	await _dispose_tracked()
 
 
+## 验证班次判断、出入口等待、服务结算和等待点分散。
 func _test_schedule_and_waiting() -> void:
+	# 班次组验证工作日边界、服务等待、等待点和需求中断。
 	TickManager.total_ticks = 599
 	var schedule_station := _create_workstation(_next_origin(), {}, {}, 1, 1)
 	_check(
@@ -537,7 +566,9 @@ func _test_schedule_and_waiting() -> void:
 	await _dispose_tracked()
 
 
+## 验证工作创建、跨仓库取料、锁定推进、硬中断和周期结算。
 func _test_work_cycles() -> void:
+	# 工作周期组从跨仓库取料开始，逐步覆盖锁定、硬中断、取消和结算。
 	TickManager.total_ticks = 600
 	var origin := _next_origin()
 	var station := _create_workstation(origin, {
@@ -1003,7 +1034,9 @@ func _test_work_cycles() -> void:
 	await _dispose_tracked()
 
 
+## 验证库存容量、锁定、预留、补位、取消和所有者优先级。
 func _test_inventory() -> void:
+	# 账本组直接构造库存与周期，覆盖容量、锁、预留、补位和优先级。
 	var inventory := _create_virtual_inventory(10, Vector2i(20, 20), false)
 	inventory.add_items_unchecked({MaterialTypes.ItemType.WASTE: 4})
 	var overflow_reservations := MaterialSystem.reserve_output(
@@ -1422,7 +1455,9 @@ func _test_inventory() -> void:
 	_clear_virtual_owners()
 
 
+## 验证建筑、仓库、居民和虚拟库存消失后的物资转移与记录清理。
 func _test_cleanup() -> void:
+	# 清理组验证所有者消失时物资转移、销毁和关联记录失效。
 	var source := _create_virtual_owner(20, Vector2i(60, 30), false, {
 		MaterialTypes.ItemType.METAL: 3,
 	})
@@ -1673,7 +1708,9 @@ func _test_cleanup() -> void:
 	_clear_virtual_owners()
 
 
+## 验证建筑详情数据、可编辑数字输入、刷新焦点稳定和布局边界。
 func _test_ui_contract() -> void:
+	# UI 契约组直接读取详情数据，并在无头视口中检查焦点与布局稳定性。
 	var scrap_sorting_station: Building = get_parent().get(
 		"scrap_sorting_station"
 	) as Building
@@ -1804,7 +1841,9 @@ func _test_ui_contract() -> void:
 	)
 
 
+## 恢复场景后运行真实居民模拟，验证时间推进和工作结果。
 func _test_integration() -> void:
+	# 集成组推进完整游戏日，确认雇佣与工作周期结果确实落到真实模拟中。
 	TickManager.auto_run = false
 	for _i in range(1800):
 		TickManager.advance_tick()
@@ -1838,6 +1877,7 @@ func _test_integration() -> void:
 	)
 
 
+## 创建并放置一个可配置工作站，记录到验收生命周期并返回实例。
 func _create_workstation(
 	origin: Vector2i,
 	demand: Dictionary,
@@ -1863,6 +1903,7 @@ func _create_workstation(
 	return station
 
 
+## 创建并放置一个测试仓库，记录到验收生命周期并返回实例。
 func _create_test_warehouse(
 	origin: Vector2i,
 	items: Dictionary = {},
@@ -1879,6 +1920,7 @@ func _create_test_warehouse(
 	return test_warehouse
 
 
+## 在指定格生成居民，记录到验收生命周期并返回实例。
 func _spawn_human(
 	cell: Vector2i,
 	age_status: GlobalEnum.AgeStatus = GlobalEnum.AgeStatus.ADULT,
@@ -1895,6 +1937,7 @@ func _spawn_human(
 	return human
 
 
+## 创建不属于场景树的虚拟建筑所有者，用于隔离库存账本测试。
 func _create_virtual_owner(
 	capacity: int,
 	origin: Vector2i,
@@ -1915,6 +1958,7 @@ func _create_virtual_owner(
 	return owner
 
 
+## 创建并登记一个独立测试库存。
 func _create_virtual_inventory(
 	capacity: int,
 	origin: Vector2i,
@@ -1924,6 +1968,7 @@ func _create_virtual_inventory(
 	return _create_virtual_owner(capacity, origin, is_warehouse, items).inventory
 
 
+## 返回下一个互不重叠的测试设施布局格。
 func _next_origin() -> Vector2i:
 	@warning_ignore("integer_division")
 	var row := (_fixture_index / 30) % 10
@@ -1935,12 +1980,14 @@ func _next_origin() -> Vector2i:
 	return origin
 
 
+## 临时注销场景原有居民，避免干扰验收测试。
 func _suspend_existing_humans() -> void:
 	_suspended_humans = TickManager.humans.duplicate()
 	for human in _suspended_humans:
 		TickManager.unregister_human(human)
 
 
+## 恢复验收前暂停的原有居民。
 func _restore_existing_humans() -> void:
 	for human in _suspended_humans:
 		if is_instance_valid(human):
@@ -1948,6 +1995,7 @@ func _restore_existing_humans() -> void:
 	_suspended_humans.clear()
 
 
+## 临时注销场景原有仓库，隔离外部库存来源。
 func _suspend_existing_warehouses() -> void:
 	_suspended_inventories.clear()
 	for building in TickManager.get_buildings_of_type(GlobalEnum.BuildingType.WAREHOUSE):
@@ -1956,6 +2004,7 @@ func _suspend_existing_warehouses() -> void:
 			_suspended_inventories.append(building.inventory)
 
 
+## 恢复验收前临时注销的仓库库存。
 func _restore_existing_warehouses() -> void:
 	for inventory in _suspended_inventories:
 		if is_instance_valid(inventory) and is_instance_valid(inventory.owner):
@@ -1963,6 +2012,7 @@ func _restore_existing_warehouses() -> void:
 	_suspended_inventories.clear()
 
 
+## 销毁本组验收创建并追踪的全部居民和建筑。
 func _dispose_tracked() -> void:
 	for human in _tracked_humans:
 		if is_instance_valid(human) and not human.is_queued_for_deletion():
@@ -1978,6 +2028,7 @@ func _dispose_tracked() -> void:
 	await get_tree().process_frame
 
 
+## 清理虚拟所有者及其库存，不触发场景级物资转移。
 func _clear_virtual_owners() -> void:
 	for owner in _virtual_owners:
 		if not is_instance_valid(owner):
@@ -1988,6 +2039,7 @@ func _clear_virtual_owners() -> void:
 	_virtual_owners.clear()
 
 
+## 从详情板块数组中查找指定板块 ID 的数据。
 func _find_section(sections: Array[Dictionary], section_id: String) -> Dictionary:
 	for section in sections:
 		if String(section.get("id", "")) == section_id:
@@ -1995,6 +2047,7 @@ func _find_section(sections: Array[Dictionary], section_id: String) -> Dictionar
 	return {}
 
 
+## 从详情板块中查找指定行键的数据。
 func _find_row(section: Dictionary, key: String) -> Dictionary:
 	if section.is_empty():
 		return {}
@@ -2004,6 +2057,7 @@ func _find_row(section: Dictionary, key: String) -> Dictionary:
 	return {}
 
 
+## 深度查找节点下第一个可用的 [SpinBox]。
 func _find_first_spinbox(node: Node) -> SpinBox:
 	if node is SpinBox:
 		return node as SpinBox
@@ -2014,6 +2068,7 @@ func _find_first_spinbox(node: Node) -> SpinBox:
 	return null
 
 
+## 比较建筑节点位置与 [param center_cell] 对应的格子中心是否在浮点容差内一致。
 func world_position_matches(building: Building, center_cell: Vector2i) -> bool:
 	var expected_origin := center_cell - Vector2i(
 		building.size_cells.x / 2,

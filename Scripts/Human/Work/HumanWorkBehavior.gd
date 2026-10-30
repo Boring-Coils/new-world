@@ -1,33 +1,55 @@
+## 单个居民的工作周期事务。[br]
+## 负责创建周期、锁定需求、跨仓库取料、返岗、推进、原子结算与取消回滚。[br]
+## 所有移动仍委托给 [HumanMotion]，本类只决定何时前往哪个建筑。
 class_name HumanWorkBehavior
 extends RefCounted
 
-## 单个居民自己的工作周期事务。负责取料、路线、锁定周期、
-## 原子结算与取消回滚；移动仍全部委托给 HumanMotion。
-
+## 工作事务的阶段。[br]
+## 阶段决定本刻应推进路线、锁定工作还是等待结算重试。
 enum Phase {
+	## 当前没有进行中的工作周期。
 	IDLE,
+	## 已锁定需求，正在依次前往外部仓库取料。
 	ACQUIRING,
+	## 物资已取齐，正在返回雇主建筑。
 	RETURNING_TO_WORK,
+	## 已进入工作站，正在按刻推进工作耗时。
 	LOCKED,
+	## 工作耗时已结束，但产出尚未成功结算。
 	PENDING_SETTLEMENT,
 }
 
+## 本事务所属的居民。
 var human: Human = null
+
+## 拥有本事务的居民 AI 控制器。
 var ai: HumanAI = null
+
+## 执行全部路线的移动组件。
 var motion: HumanMotion = null
+
+## 当前工作周期；空闲时为 null。
 var cycle: WorkCycle = null
+
+## 当前工作事务阶段。
 var phase: Phase = Phase.IDLE
 
+# 需要依次前往取料的外部库存列表。
 var _source_inventories: Array[Inventory] = []
+
+# 当前取料路线对应的外部库存索引。
 var _source_index: int = 0
 
 
+## 绑定居民、AI 控制器并缓存移动组件。
 func bind(host: Human, controller: HumanAI) -> void:
 	human = host
 	ai = controller
 	motion = host.motion
 
 
+## 尝试为 [param employer] 创建并启动一次工作周期。[br]
+## 会校验雇佣、班次和工作类型，锁定需求与产出空间，再选择站内开工或跨仓库取料路线。
 func begin(employer: Building) -> bool:
 	if cycle != null and not cycle.is_finished():
 		return false
@@ -48,6 +70,7 @@ func begin(employer: Building) -> bool:
 	var holder := new_cycle.get_holder_id()
 	var external_inventories := ai.get_reachable_warehouse_inventories()
 
+	# 先锁定需求，再预留产出空间；任一阶段失败都必须释放已获取的记录。
 	var demand_locks: Array[String] = []
 	if not work_type.demand.is_empty():
 		demand_locks = MaterialSystem.lock_demand(
@@ -78,6 +101,7 @@ func begin(employer: Building) -> bool:
 	cycle = new_cycle
 	_take_locks_at(employer.inventory)
 	_collect_external_sources()
+	# 站内已有全部需求时直接开工，否则按距离依次前往外部仓库取料。
 	if _source_inventories.is_empty():
 		if not _start_locked():
 			return false
@@ -89,6 +113,8 @@ func begin(employer: Building) -> bool:
 	return true
 
 
+## 推进当前工作周期一刻。[br]
+## 锁定阶段会重新验证需求与产出空间并递减倒计时；当刻结束或待结算时返回状态名。
 func tick() -> StringName:
 	if cycle == null:
 		return &""
@@ -105,6 +131,7 @@ func tick() -> StringName:
 	return &""
 
 
+## 响应移动到达事件，推进取料仓库序列或开始返岗/工作。
 func on_motion_arrived() -> void:
 	if cycle == null:
 		return
@@ -122,10 +149,13 @@ func on_motion_arrived() -> void:
 		_start_locked()
 
 
+## 取料或返岗路线失败时取消当前工作周期。
 func on_path_failed() -> void:
 	cancel("取料或返岗路径失败")
 
 
+## 取消当前周期并回滚全部需求锁和产出预留。[br]
+## [param reason] 用于日志；场景关闭时静默清理，不输出业务取消日志。
 func cancel(reason: String = "工作周期取消") -> void:
 	if cycle == null:
 		phase = Phase.IDLE
@@ -142,14 +172,17 @@ func cancel(reason: String = "工作周期取消") -> void:
 		print("[WORK] %s 周期取消：%s" % [human.name if human != null else "居民", reason])
 
 
+## 返回周期是否已进入不可被普通生存需求打断的锁定阶段。
 func is_locked() -> bool:
 	return cycle != null and phase == Phase.LOCKED
 
 
+## 返回是否仍有一个尚未完成或取消的工作周期。
 func is_busy() -> bool:
 	return cycle != null and not cycle.is_finished()
 
 
+## 返回当前阶段的稳定调试名称。
 func get_phase_name() -> StringName:
 	match phase:
 		Phase.ACQUIRING:
@@ -164,6 +197,7 @@ func get_phase_name() -> StringName:
 			return &"idle"
 
 
+## 返回工作阶段、周期、倒计时和账本记录数量的调试快照。
 func get_debug_snapshot() -> Dictionary:
 	if cycle == null:
 		return {
@@ -180,6 +214,7 @@ func get_debug_snapshot() -> Dictionary:
 	}
 
 
+## 验证 [param employer] 仍是有效、已放置且与本居民保持雇佣关系的工作站。
 func _validate_employer(employer: Building) -> bool:
 	return (
 		is_instance_valid(employer)
@@ -190,6 +225,7 @@ func _validate_employer(employer: Building) -> bool:
 	)
 
 
+## 从当前周期的需求锁中收集需要前往取料的外部库存，并按锁顺序去重。
 func _collect_external_sources() -> void:
 	_source_inventories.clear()
 	for lock_id in cycle.demand_locks:
@@ -203,6 +239,7 @@ func _collect_external_sources() -> void:
 			_source_inventories.append(inventory)
 
 
+## 前往当前索引入口对应的外部仓库；索引耗尽时改为返回雇主。
 func _start_current_source_route() -> bool:
 	if _source_index >= _source_inventories.size():
 		_route_to_employer()
@@ -220,6 +257,7 @@ func _start_current_source_route() -> bool:
 	return true
 
 
+## 切换为返岗阶段并开始前往雇主建筑的路线。
 func _route_to_employer() -> void:
 	if not _validate_employer(cycle.employer):
 		cancel("雇主已失效")
@@ -229,6 +267,7 @@ func _route_to_employer() -> void:
 		cancel("无法返回雇主")
 
 
+## 在 [param inventory] 对应的仓库入口实际取走尚未取出的需求锁。
 func _take_locks_at(inventory: Inventory) -> void:
 	if cycle == null or inventory == null:
 		return
@@ -241,6 +280,7 @@ func _take_locks_at(inventory: Inventory) -> void:
 			MaterialSystem.take_locked(lock_id)
 
 
+## 完成全部前置校验后进入锁定阶段并尝试进入工作站内部。
 func _start_locked() -> bool:
 	if cycle == null or not _validate_employer(cycle.employer):
 		cancel("雇主已失效")
@@ -262,6 +302,8 @@ func _start_locked() -> bool:
 	return true
 
 
+## 验证锁定周期仍满足雇佣、需求锁和产出预留要求。[br]
+## 产出预留失效时会尝试用当前可达仓库补足。
 func _validate_locked_cycle() -> bool:
 	if cycle == null or not _validate_employer(cycle.employer):
 		return false
@@ -278,6 +320,7 @@ func _validate_locked_cycle() -> bool:
 	return true
 
 
+## 尝试原子结算工作周期；空间或锁失效时进入待结算阶段。
 func _settle() -> StringName:
 	if not MaterialSystem.settle_cycle(cycle):
 		phase = Phase.PENDING_SETTLEMENT
@@ -302,6 +345,7 @@ func _settle() -> StringName:
 	return &"completed"
 
 
+## 清理居民当前站内占用并恢复世界显示。
 func _leave_host_building() -> void:
 	if not is_instance_valid(human) or not is_instance_valid(human.in_building):
 		return

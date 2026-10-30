@@ -1,10 +1,9 @@
+## 居民的唯一移动实现。[br]
+## 负责路径缓存、逐刻连续移动、选择建筑出入口，以及被建筑压住后的脱困移动。[br]
+## 本组件不选择目标，也不直接写 AI 状态；由 [HumanAI] 每刻调用一次 [method on_tick]。[br]
+## 建筑内路线先从出入口出发，离站时必须完成占用清理、位置更新和显示恢复。
 extends Node
 class_name HumanMotion
-
-## 居民的移动组件。[br]
-## 负责路径缓存、逐刻连续移动、选择建筑出入口，以及被建筑压住后的脱困移动。[br]
-## 本组件不决定目标，也不直接写 AI 状态；由 [HumanAI] 决定去哪里，再由本组件执行。[br]
-## 它不会自行创建 [code]_process[/code] 循环，只由 [HumanAI] 每刻调用一次 [method on_tick]。
 
 ## 开始沿一条新路径移动
 signal movement_started(destination: Vector2i)
@@ -54,20 +53,22 @@ var destination_cell: Vector2i = INVALID_CELL
 ## 最终落点相对目标格中心的偏移，用于等待点等实际位置语义。
 var destination_offset: Vector2 = Vector2.ZERO
 
-## 个体移动速度偏移，避免所有居民以完全相同的速度行走
+# 个体移动速度偏移，避免所有居民以完全相同的速度行走。
 var _random_speed_offset: float = 1.0
 
-## 当前是否为「被建筑压住后走到空地」的特殊移动
+# 当前是否处于被建筑挤出后的特殊移动。
 var _is_relocating: bool = false
 
-## 当前是否发过移动开始信号，用来避免重复发信号
+# 当前移动状态，用于只在开始或结束时发送一次信号。
 var _moving: bool = false
 
 
+## 初始化每个居民独立的随机速度偏移。
 func _init() -> void:
 	_random_speed_offset = 0.9 + randf() * 0.2
 
 
+## 未显式绑定时，从父节点自动取得所属居民。
 func _ready() -> void:
 	if human == null:
 		human = get_parent() as Human
@@ -93,7 +94,7 @@ func get_path_size() -> int:
 	return path.size()
 
 
-## 移动到建筑最近的、按实际寻路距离可达的出入口。
+## 移动到建筑最近的、按实际寻路距离可达的出入口。[br]
 ## 返回是否成功开始移动。
 func move_to_building(building: Building) -> bool:
 	if not _can_move() or not is_instance_valid(building):
@@ -112,7 +113,7 @@ func move_to_cell(cell: Vector2i) -> bool:
 	return _start_route(route, false)
 
 
-## 移动到世界坐标附近。只允许最终偏移不超过半格；
+## 移动到世界坐标附近。只允许最终偏移不超过半格；[br]
 ## 寻路仍以格子为单位，HumanMotion 继续是唯一移动实现。
 func move_to_position(world_position: Vector2) -> bool:
 	if not _can_move():
@@ -156,7 +157,7 @@ func move_to_nearest_building(building_type: GlobalEnum.BuildingType) -> bool:
 	return _start_route(route, false)
 
 
-## 从当前状态出发，到某一类建筑最近的出入口大约需要多少刻。
+## 从当前状态出发，到某一类建筑最近的出入口大约需要多少刻。[br]
 ## 找不到可达建筑或居民无效时返回 -1。
 func get_ticks_to_building(building_type: GlobalEnum.BuildingType) -> int:
 	var route := _find_nearest_route_to_type(building_type)
@@ -174,6 +175,8 @@ func get_ticks_to_building_instance(building: Building) -> int:
 	return _get_ticks_for_route(route)
 
 
+## 根据路线世界距离和当前每刻速度估算所需刻数。[br]
+## 路线为空或速度无效时返回 -1。
 func _get_ticks_for_route(route: Dictionary) -> int:
 	if route.is_empty():
 		return -1
@@ -240,6 +243,7 @@ func on_tick() -> void:
 		return
 
 	var world := WorldGridGlobal.world
+	# 单刻可以跨过多个路径点，循环消耗剩余步长直到停在一个格间位置。
 	while step > 0.0 and path_index < path.size():
 		var target_position := world.cell_to_world(path[path_index])
 		if path_index == path.size() - 1:
@@ -267,6 +271,7 @@ func get_speed_cells_per_tick() -> float:
 	if not is_instance_valid(human):
 		return 0.0
 
+	# 年龄阶段先给出基础倍率，再叠加个体偏移和 Buff 速度倍率。
 	var speed_scale := 1.0
 	match human.age_status:
 		GlobalEnum.AgeStatus.CHILD:
@@ -315,6 +320,7 @@ func _find_route_to_building(building: Building) -> Dictionary:
 	var world := WorldGridGlobal.world
 	var starts := _get_route_starts()
 	var best := {}
+	# 每个合法起点到每个入口都计算一次，按实际世界距离选出最短组合。
 	for start_cell in starts:
 		for entrance_cell in building.get_entrance_cells():
 			var candidate_path := world.get_path(start_cell, entrance_cell)
@@ -339,6 +345,7 @@ func _find_route_to_cell(target_cell: Vector2i) -> Dictionary:
 	if not world.is_in_bounds(target_cell) or not world.is_walkable(target_cell):
 		return {}
 
+	# 从建筑内出发时可能有多个候选出口，因此仍需逐个比较完整路径。
 	var best := {}
 	for start_cell in _get_route_starts():
 		var candidate_path := world.get_path(start_cell, target_cell)
@@ -399,6 +406,7 @@ func _start_route(route: Dictionary, relocating: bool) -> bool:
 	var new_destination: Vector2i = route["entrance_cell"]
 	var new_offset: Vector2 = route.get("final_offset", Vector2.ZERO)
 
+	# 路线的 exit_cell 已经过可达性预检，这里在同一调用内完成离站和路径切换。
 	_commit_building_exit(exit_cell)
 
 	path = new_path

@@ -1,20 +1,24 @@
+## 调试与建造场景共用的放置控制器。[br]
+## 负责预览建筑、校验目标格、提交放置，以及检查居民出生格是否合法。[br]
+## 建筑放置复用 [method Building.can_place_at] 与 [method Building.place_at] 的完整流程；[br]
+## 左键提交、右键或 Escape 取消，放置期间禁用已有建筑的点击区。
 extends Node2D
 class_name PlacementController
 
-## 调试用放置工具。[br]
-## 选中一种建筑或「居民」之后，鼠标位置会出现一个半透明预览：[br]
-## 绿色描边 = 这一格能放，红色 = 不能放。左键放下，右键 / ESC 取消。[br]
-## 建筑放置会走 [method Building.can_place_at] 的完整校验；[br]
-## 居民只能放在可走的空地上（不能压在建筑或障碍上）。
-
 ## 可以放什么
 enum Kind {
-	NONE,  ## 没在放东西
-	WATER, ## 取水站
-	FOOD,  ## 取食站
-	WORK,  ## 工作站
-	WAREHOUSE, ## 仓库
-	HUMAN, ## 居民
+	## 未选择任何放置内容。
+	NONE,
+	## 放置取水站。
+	WATER,
+	## 放置取食站。
+	FOOD,
+	## 放置废料分拣工作站。
+	WORK,
+	## 放置仓库。
+	WAREHOUSE,
+	## 放置成年居民。
+	HUMAN,
 }
 
 ## 放成功或失败时发一句提示，给 UI 显示
@@ -22,24 +26,27 @@ signal notice(text: String)
 
 ## 调试菜单放置的居民统一使用成年年龄段
 const DEBUG_HUMAN_AGE_MIN: int = 18
+
+## 调试菜单随机生成居民年龄的上限（含）。
 const DEBUG_HUMAN_AGE_MAX: int = 59
 
 ## 当前选中的类型
 var kind: Kind = Kind.NONE
 
-## 当前鼠标下的格子
+# 当前鼠标对应的格子坐标。
 var _hover_cell: Vector2i = Vector2i.ZERO
 
-## 这一格当前能不能放
+# 当前预览格是否通过放置校验。
 var _hover_valid: bool = false
 
-## 建筑预览实例（放人时为 null）
+# 建筑预览实例；放置居民或未选择建筑时为 null。
 var _ghost: Building = null
 
 ## 调试用：把预览钉在某一格（-1 表示跟随鼠标）
 var debug_hover_cell: Vector2i = Vector2i(-1, -1)
 
 
+## 把放置高亮层放到建筑和居民上方。
 func _ready() -> void:
 	# 盖在建筑和居民上面
 	z_index = 50
@@ -51,7 +58,8 @@ func _process(_delta: float) -> void:
 		_update_hover()
 
 
-## 切换要放的东西（传 [enum Kind] 里的值）
+## 切换当前放置类型并重建对应预览。[br]
+## [param new_kind] 应使用 [enum Kind] 中的值；进入建筑放置模式时会禁用已有建筑点击。
 func select_kind(new_kind: int) -> void:
 	kind = new_kind
 	_clear_ghost()
@@ -68,20 +76,19 @@ func select_kind(new_kind: int) -> void:
 	queue_redraw()
 
 
-## 放置模式下，已有建筑不能再被点开详情页。[br]
-## 建筑的 Body 是 Button，[constant Control.MOUSE_FILTER_STOP] 会把左键点击吃掉，[br]
-## 于是「想在这格放东西」就变成了「点开了这栋建筑」，本节点的放置逻辑根本收不到事件。
+## 启用或禁用所有已登记建筑的点击区，防止放置点击被建筑按钮吞掉。
 func _set_buildings_clickable(enabled: bool) -> void:
 	for building in TickManager.buildings:
 		if is_instance_valid(building):
 			building.set_click_enabled(enabled)
 
 
-## 取消当前放置
+## 取消当前放置模式并清理预览。
 func cancel() -> void:
 	select_kind(Kind.NONE)
 
 
+## 处理放置模式下的左键提交、右键取消和 Escape 取消。
 func _unhandled_input(event: InputEvent) -> void:
 	if kind == Kind.NONE:
 		return
@@ -100,14 +107,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 
-## 鼠标所指的格子 → 建筑左上角那一格（让建筑大致以鼠标为中心）
+## 根据当前预览尺寸计算建筑左上角，使建筑尽量以 [param mouse_cell] 为中心。
 func _origin_for(mouse_cell: Vector2i) -> Vector2i:
 	if _ghost == null or not is_instance_valid(_ghost):
 		return mouse_cell
 	return mouse_cell - Vector2i(_ghost.size_cells.x / 2, _ghost.size_cells.y / 2)
 
 
-## 更新鼠标所在格子和预览位置
+## 刷新当前目标格、建筑预览位置和可放置状态。
 func _update_hover() -> void:
 	var world := WorldGridGlobal.world
 	if debug_hover_cell.x >= 0:
@@ -128,12 +135,13 @@ func _update_hover() -> void:
 	queue_redraw()
 
 
-## 在当前格子放下东西
+## 尝试在当前鼠标格提交放置。
 func _try_place() -> void:
 	place_at_cell(_hover_cell)
 
 
-## 直接在某格放置（传鼠标所指的格子，建筑会自动以它为中心）。放成功返回 true。
+## 直接在 [param mouse_cell] 放置当前类型，建筑会自动以该格为中心。[br]
+## 成功返回 [code]true[/code]，失败时通过 [signal notice] 给出原因。
 func place_at_cell(mouse_cell: Vector2i) -> bool:
 	var world := WorldGridGlobal.world
 
@@ -165,7 +173,7 @@ func place_at_cell(mouse_cell: Vector2i) -> bool:
 	return true
 
 
-## 把站在新建筑占地范围内的人挤出去（他们自己走到最近的空地）
+## 让站在 [param building] 占地范围内的居民执行脱困移动。
 func _evict_humans_in(building: Building) -> void:
 	var cells := building.get_occupied_cells()
 	var moved := 0
@@ -179,7 +187,7 @@ func _evict_humans_in(building: Building) -> void:
 		print("[PLACE] 有 %d 个居民被 %s 压住，正在自己走出来" % [moved, building.name])
 
 
-## 放一个居民
+## 在可走且无其他居民的 [param cell] 创建一个成年居民。
 func _place_human(cell: Vector2i) -> bool:
 	var world := WorldGridGlobal.world
 	if not world.is_walkable(cell):
@@ -209,6 +217,7 @@ func _place_human(cell: Vector2i) -> bool:
 	return true
 
 
+## 向上查找最近的 [World] 根节点，用作新居民的父节点。
 func _find_world_parent() -> World:
 	var node: Node = get_parent()
 	while node != null:
@@ -222,6 +231,7 @@ func _find_world_parent() -> World:
 # 内部
 # ---------------------------------------------------------------------------
 
+## 根据 [param kind_value] 创建对应建筑类型；未知类型返回基础 [Building]。
 func _create_building(kind_value: Kind) -> Building:
 	match kind_value:
 		Kind.WATER:
@@ -236,6 +246,7 @@ func _create_building(kind_value: Kind) -> Building:
 			return Building.new()
 
 
+## 释放并清空当前建筑预览实例。
 func _clear_ghost() -> void:
 	if _ghost != null and is_instance_valid(_ghost):
 		_ghost.queue_free()

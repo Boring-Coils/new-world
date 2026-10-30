@@ -1,14 +1,17 @@
+## 居民在建筑出入口等待服务的状态。[br]
+## 进入时读取建筑服务耗时，每刻递减并处理工作闸门、紧急中断和完成事件。
 extends HumanStateBase
 
-## 等待状态：按游戏刻递减建筑服务时间。
-
+# 当前服务剩余刻数。
 var _wait_left: int = 0
 
 
+## 返回等待状态的稳定键。
 func _state_key() -> StringName:
 	return &"waiting"
 
 
+## 进入等待时验证目标并初始化建筑提供的等待刻数。
 func _on_enter() -> void:
 	var target := _controller.get_target()
 	if not is_instance_valid(target):
@@ -26,6 +29,7 @@ func _on_enter() -> void:
 		_finish_wait()
 
 
+## 每刻处理目标失效、工作中断，并推进服务倒计时。
 func _on_step() -> void:
 	if not _controller.is_target_valid():
 		_send(HumanAI.EVENT_TARGET_INVALID)
@@ -44,9 +48,11 @@ func _on_step() -> void:
 		_finish_wait()
 
 
+## 等待结束时向控制器询问完成事件并发送给状态机。
 func _finish_wait() -> void:
 	_send(_controller.complete_current_wait())
 
 
+## 返回等待状态用于调试面板的剩余刻数。
 func get_debug_data() -> Dictionary:
 	return {"wait_left": maxi(_wait_left, 0)}

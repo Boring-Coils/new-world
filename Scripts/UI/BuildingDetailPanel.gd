@@ -1,11 +1,8 @@
+## 通用建筑详情页。[br]
+## 内容完全由 [method Building.get_detail_sections] 提供，面板不识别具体建筑类型。[br]
+## 点击建筑打开或收起，点击空地关闭；每游戏刻刷新数值，并在结构变化时重建行控件。
 extends CanvasLayer
 class_name BuildingDetailPanel
-
-## 右侧建筑详情页：占屏幕宽度的 [constant WIDTH_RATIO]，铺满整个高度。[br]
-## 本类[b]不认识任何具体建筑[/b]：内容一律问 [method Building.get_detail_sections]，[br]
-## 所以以后加医院、仓库、农田都不用改这里——只要子类在自己的 [method Building.build_detail] 里加行。[br]
-## 打开方式：点建筑（[signal Building.clicked]）；关闭方式：点空地，或再点一次同一栋。[br]
-## 刷新时机：每游戏刻重建一次，暂停时自然停更。
 
 ## 面板占屏幕宽度的比例（1/5）
 const WIDTH_RATIO: float = 0.2
@@ -13,26 +10,29 @@ const WIDTH_RATIO: float = 0.2
 ## 窄窗口下保持可用行宽的最小面板宽度。
 const MIN_PANEL_WIDTH: float = 280.0
 
-## 外层面板
+# 右侧外层面板。
 var _panel: PanelContainer
 
-## 标题（建筑名）
+# 当前建筑名称标题。
 var _title: Label
 
-## 所有板块和行都塞在这个容器里，每次刷新清空重建
+# 承载板块标题与数据行的可滚动容器。
 var _body: VBoxContainer
 
-## 当前选中的建筑（null = 没选中）
+# 当前选中的建筑；面板关闭时为 null。
 var _current: Building = null
 
-## 当前结构签名和可原位更新的行控件。
+# 当前详情结构的签名，用于判断能否只更新数值而不重建控件。
 var _structure_signature: String = ""
+
+# 结构键到行控件引用的映射，用于原位刷新。
 var _row_widgets: Dictionary = {}
 
-## 底部「摧毁」按钮。固定不滚，所以单独存一份引用
+# 底部固定显示的拆除按钮。
 var _demolish_button: Button = null
 
 
+## 初始化面板、订阅建筑注册与每刻刷新，并补连已存在建筑。
 func _ready() -> void:
 	# 盖在调试面板上面一点，避免被建筑挡住
 	layer = 10
@@ -48,6 +48,7 @@ func _ready() -> void:
 	TickManager.tick_advanced.connect(_on_tick_advanced)
 
 
+## 创建面板、标题、滚动内容和底部拆除按钮。
 func _build() -> void:
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.08, 0.09, 0.11, 0.92)
@@ -101,6 +102,7 @@ func _build() -> void:
 	vbox.add_child(_demolish_button)
 
 
+## 按视口宽度和最小宽度约束更新右侧面板尺寸。
 func _update_panel_width() -> void:
 	if _panel == null:
 		return
@@ -164,6 +166,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		hide_panel()
 
 
+## 面板打开时在每刻结束后刷新当前建筑内容。
 func _on_tick_advanced(_total_ticks: int, _day: int, _tick_of_day: int) -> void:
 	if is_open():
 		_refresh()
@@ -178,6 +181,7 @@ func _refresh() -> void:
 	_title.text = _current.display_name
 	var visible_sections: Array[Dictionary] = []
 	var signature_parts: Array[String] = [str(_current.get_instance_id())]
+	# 每次刷新先过滤隐藏内容，并用结构签名区分“只改数值”和“需要重建行”。
 	for section in _current.get_detail_sections():
 		if section["hidden"]:
 			continue
@@ -201,6 +205,7 @@ func _refresh() -> void:
 
 	var new_signature := "||".join(signature_parts)
 	if new_signature != _structure_signature:
+		# 用户正在输入时推迟结构重建，避免焦点和未提交文本被破坏。
 		if _has_focused_control(_body):
 			return
 		_rebuild_rows(visible_sections)
@@ -210,6 +215,7 @@ func _refresh() -> void:
 	_update_rows(visible_sections)
 
 
+## 清空并按 [param visible_sections] 重建全部板块标题和数据行。
 func _rebuild_rows(visible_sections: Array[Dictionary]) -> void:
 
 	# 先清空旧的控件
@@ -242,6 +248,7 @@ func _rebuild_rows(visible_sections: Array[Dictionary]) -> void:
 			_body.add_child(row_widget)
 
 
+## 在不重建控件的前提下刷新现有文本值和数字输入值。
 func _update_rows(visible_sections: Array[Dictionary]) -> void:
 	for wrapper in visible_sections:
 		var section: Dictionary = wrapper["section"]
@@ -260,7 +267,7 @@ func _update_rows(visible_sections: Array[Dictionary]) -> void:
 					value_label.text = String(row["value"])
 
 
-## 一行 = 左边标签 + 右边数值
+## 创建“左侧标签、右侧文本或数字输入”的一行控件，并登记到缓存。
 func _make_row(row_data: Dictionary, row_key: String) -> HBoxContainer:
 	var row := HBoxContainer.new()
 
@@ -272,6 +279,7 @@ func _make_row(row_data: Dictionary, row_key: String) -> HBoxContainer:
 	row.add_child(label)
 
 	if String(row_data.get("kind", "text")) == "number":
+		# 数字输入只回传整数，范围约束由 SpinBox 和建筑回调共同保证。
 		var input := SpinBox.new()
 		input.min_value = float(row_data.get("min", 0))
 		input.max_value = float(row_data.get("max", 0))
@@ -312,6 +320,7 @@ func _make_row(row_data: Dictionary, row_key: String) -> HBoxContainer:
 	return row
 
 
+## 递归判断 [param node] 或其子节点是否持有键盘焦点。
 func _has_focused_control(node: Node) -> bool:
 	var control := node as Control
 	if control != null and control.has_focus():
@@ -333,6 +342,7 @@ func get_layout_issues() -> Array[String]:
 	return issues
 
 
+## 递归检查控件最小尺寸、文本截断和水平子控件重叠，并追加到 [param issues]。
 func _collect_layout_issues(node: Node, issues: Array[String]) -> void:
 	var control := node as Control
 	if control != null and control.visible:
@@ -352,6 +362,7 @@ func _collect_layout_issues(node: Node, issues: Array[String]) -> void:
 				issues.append("文本超出控件：%s" % label.text)
 		if control is HBoxContainer:
 			var previous_right := -1.0
+		# 水平容器中的可见子控件必须按顺序排列，出现回退即视为重叠。
 			for child in control.get_children():
 				var child_control := child as Control
 				if child_control == null or not child_control.visible:

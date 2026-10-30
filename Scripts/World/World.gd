@@ -1,16 +1,15 @@
+## 所有世界场景共用的基础设施根节点。[br]
+## 负责初始化场景物资账本、相机、网格显示和世界级建筑详情页。[br]
+## 建筑、居民和具体玩法属于 [Colony] 或测试场景，不应放进本类。
 extends Node2D
 class_name World
-
-## 所有世界场景的根节点骨架：负责「看得见但摸不着」的那层基础设施。[br]
-## 现在只有相机和网格，以后世界级的东西（光照、天气、全局着色）也挂这里。[br]
-## [b]不要往本类塞任何游戏规则[/b]——建筑、居民、资源一律属于 Colony / TestScene 那一层，[br]
-## 否则空场景也会莫名其妙地摆出东西来。
 
 ## 相机对着哪里、缩放多少，见 [CameraRig]
 
 ## 未就业和下班居民的世界等待锚点（像素坐标）。
 const WAIT_PLACE := Vector2(4800, 5000)
 
+## 初始化当前场景的物资账本，并挂载相机、网格和建筑详情页。
 func _ready() -> void:
 	MaterialSystem.start_scene()
 	_setup_camera()
@@ -18,6 +17,7 @@ func _ready() -> void:
 	_setup_detail_panel()
 
 
+## 在退出场景树时标记物资账本进入关闭阶段，阻止跨场景物资转移。
 func _exit_tree() -> void:
 	MaterialSystem.begin_scene_shutdown()
 
@@ -29,6 +29,7 @@ func _setup_detail_panel() -> void:
 	add_child(panel)
 
 
+## 创建并挂载独立的相机控制节点。
 func _setup_camera() -> void:
 	# 相机和它的平移逻辑都在 CameraRig 里，本类只负责把它挂上来
 	var rig := CameraRig.new()
@@ -36,6 +37,7 @@ func _setup_camera() -> void:
 	add_child(rig)
 
 
+## 创建网格显示层并放到角色与建筑下方。
 func _setup_grid() -> void:
 	var grid := GridDisplay.new()
 	grid.name = "GridDisplay"

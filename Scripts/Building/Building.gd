@@ -1,20 +1,9 @@
+## 所有建筑的矩形基类。[br]
+## 负责占格、出入口、放置校验、可视节点、建筑详情、可选库存、雇佣与拆除清算。[br]
+## 建筑本体占用格不可走，出入口必须位于矩形外且与边相邻，可以与其他建筑的出入口重叠。[br]
+## 子类通过构造参数和覆盖详情钩子扩展功能，放置必须依次调用 [method can_place_at] 与 [method place_at]。
 extends Node2D
 class_name Building
-
-## 建筑基类。[br]
-## 建筑一定是矩形，占 [member size_cells] 个格子（横向 × 纵向），[br]
-## 放置时左上角必须正好落在某一格的左上角（也就是 [member origin_cell] 是格子坐标，天然对齐）。[br]
-## [b]出入口：[/b]用相对坐标 [member entrance_offsets] 描述，是相对建筑左上角格子的偏移。[br]
-## 规则：出入口必须落在建筑矩形[b]外面[/b]、并且和建筑边相邻（只碰到角不算），[br]
-## 这一格本身必须是空地（不能压别的建筑或遮挡物），但可以和别的建筑的出入口重合。[br]
-## 建筑本体不能覆盖任何已有建筑的出入口。[br]
-## [b]典型用法：[/b][br]
-## [codeblock]
-## var station := WaterStation.new()
-## station.entrance_offsets = [Vector2i(2, -1)]   # 建筑正上方那一格
-## if station.place_at(WorldGridGlobal.world, Vector2i(100, 80)):
-##     add_child(station)
-## [/codeblock]
 
 ## 建筑占多少格（横向 × 纵向）
 @export var size_cells: Vector2i = Vector2i(4, 3)
@@ -84,6 +73,8 @@ const GLYPH_TEXTURES: Dictionary = {
 
 ## 默认只雇佣成年人；具体建筑可放宽。
 @export var allow_child_workers: bool = false
+
+## 是否允许雇佣老年居民。
 @export var allow_old_workers: bool = false
 
 ## 眩晕、虚弱等临时不能工作是否直接解除雇佣。默认保留关系。
@@ -103,33 +94,37 @@ var work_type: WorkType = null
 
 ## 最近一次成功结算结果和累计次数，供建筑自身或调试面板查询。
 var last_work_result: Dictionary = {}
+
+## 最近一次成功工作结果的累计接收次数。
 var work_result_count: int = 0
 
-## 主体按钮：既是外观，也是点击区
+# 主体按钮，同时承担建筑外观与点击区域。
 var _body_button: Button = null
 
-## 顶部深色檐口
+# 顶部深色檐口装饰。
 var _cornice: ColorRect = null
 
-## 类型图标
+# 当前建筑类型图标。
 var _glyph: TextureRect = null
 
-## 出入口的黄色小广场
+# 出入口的黄色标记节点。
 var _entrance_marks: Array[ColorRect] = []
 
-## 详情页的板块列表，见 [method build_detail]
+# 当前建筑详情页的板块数据缓存。
 var _detail_sections: Array[Dictionary] = []
 
-## 防止 remove() 与 _exit_tree() 重复清算。
+# 防止拆除与场景退出重复执行生命周期清算。
 var _lifecycle_cleaned: bool = false
 
 
+## 初始化库存与可视节点，并在已放置时登记到 [TickManager]。
 func _ready() -> void:
 	_ensure_inventory()
 	_build_visuals()
 	_register_if_placed()
 
 
+## 未显式拆除就离开场景树时执行一次生命周期清理。
 func _exit_tree() -> void:
 	if not _lifecycle_cleaned:
 		_prepare_for_removal()
@@ -427,6 +422,7 @@ func set_click_enabled(enabled: bool) -> void:
 	_body_button.mouse_filter = Control.MOUSE_FILTER_STOP if enabled else Control.MOUSE_FILTER_IGNORE
 
 
+## 主体按钮被点击时发出建筑选中信号。
 func _on_body_pressed() -> void:
 	clicked.emit(self)
 
@@ -436,12 +432,13 @@ func _on_body_pressed() -> void:
 # ---------------------------------------------------------------------------
 
 ## 每次刷新前由 [method get_detail_sections] 调用，往列表里加内容，子类覆盖它即可。[br]
-## [b]这里不要清空[/b]：清空由 [method get_detail_sections] 负责，所以子类先加后加、
+## [b]这里不要清空[/b]：清空由 [method get_detail_sections] 负责，所以子类先加后加、[br]
 ## 调不调 [code]super.build_detail()[/code] 都不会把自己的内容清掉。
 func build_detail() -> void:
 	add_section("status", "状态")
 
 	if is_hireable:
+		# 雇佣建筑额外展示人数、候选和可编辑目标人数。
 		add_section("employment", "雇佣")
 		add_row("employment", "实际工人数量", "%d / %d" % [employees.size(), max_workers])
 		add_row("employment", "可补位候选人", "%d" % get_recruitable_candidate_count())
@@ -461,6 +458,7 @@ func build_detail() -> void:
 		)
 
 	if inventory != null:
+		# 库存总览始终显示，非零物品再展开到明细板块。
 		add_section("inventoryTotal", "库存总览")
 		add_row("inventoryTotal", "容量", "%d" % inventory.capacity)
 		add_row("inventoryTotal", "已用体积", "%d" % inventory.get_used_volume())
@@ -518,6 +516,7 @@ func add_number_input(
 	value: int,
 	on_changed: Callable,
 ) -> void:
+	# 建筑只声明取值范围、当前值和回调，具体控件创建完全由详情页负责。
 	for section in _detail_sections:
 		if section["id"] == section_id:
 			section["rows"].append({
@@ -570,7 +569,8 @@ func _is_edge_adjacent(cell: Vector2i, rect: Rect2i) -> bool:
 		or rect.has_point(cell + Vector2i.DOWN)
 	)
 
-## 逻辑等待补全！！！
+## 执行完整拆除流程：结束雇佣和工作、注销建筑、恢复占格并清算库存。[br]
+## 之后安排节点离开场景树；重复调用由生命周期标记保护。
 func remove() -> void:
 	_prepare_for_removal()
 	queue_free()
@@ -580,6 +580,7 @@ func remove() -> void:
 # 可选能力：雇佣、班次、库存与工作结果
 # ---------------------------------------------------------------------------
 
+## 按 [member inventory_capacity] 创建或更新自带库存；容量非正时移除库存引用。
 func _ensure_inventory() -> void:
 	if inventory_capacity <= 0:
 		inventory = null
@@ -590,6 +591,7 @@ func _ensure_inventory() -> void:
 		inventory.capacity = inventory_capacity
 
 
+## 判断 [param human] 是否可被本建筑新雇佣。
 func can_accept_employee(human: Human) -> bool:
 	if not is_hireable or not is_placed:
 		return false
@@ -602,6 +604,7 @@ func can_accept_employee(human: Human) -> bool:
 	return can_accept_age(human)
 
 
+## 返回当前世界内符合本建筑雇佣条件的候选居民数量。
 func get_recruitable_candidate_count() -> int:
 	var count := 0
 	for human in TickManager.humans:
@@ -610,6 +613,7 @@ func get_recruitable_candidate_count() -> int:
 	return count
 
 
+## 判断 [param human] 是否仍满足继续雇佣的资格条件。
 func is_employee_eligible(human: Human) -> bool:
 	if not is_instance_valid(human) or not human.is_inside_tree():
 		return false
@@ -620,6 +624,7 @@ func is_employee_eligible(human: Human) -> bool:
 	return can_accept_age(human)
 
 
+## 判断 [param human] 的年龄阶段是否被本建筑允许雇佣。
 func can_accept_age(human: Human) -> bool:
 	if not is_instance_valid(human):
 		return false
@@ -632,6 +637,7 @@ func can_accept_age(human: Human) -> bool:
 			return true
 
 
+## 尝试雇佣 [param human]，同步双方关系并发出 [signal employment_changed]。
 func hire_employee(human: Human) -> bool:
 	if not can_accept_employee(human):
 		return false
@@ -641,6 +647,8 @@ func hire_employee(human: Human) -> bool:
 	return true
 
 
+## 解除与 [param human] 的雇佣关系，并通知居民结束相关工作。[br]
+## [param reason] 会传递给居民的雇佣结束处理。
 func dismiss_employee(human: Human, reason: String = "雇佣结束") -> bool:
 	if not employees.has(human):
 		return false
@@ -651,15 +659,19 @@ func dismiss_employee(human: Human, reason: String = "雇佣结束") -> bool:
 	return true
 
 
+## 设置目标工人数并请求 UI 刷新；实际调整在下一建筑刻执行。
 func set_target_workers(value: int) -> void:
 	target_workers = value
 	employment_changed.emit(self)
 
 
+## 返回当前实际雇员数量。
 func get_employee_count() -> int:
 	return employees.size()
 
 
+## 判断 [param tick_of_day] 是否处于工作时间。[br]
+## 参数为负时使用当前游戏日刻；当前班次覆盖一天的后三分之二。
 func is_work_time(tick_of_day: int = -1) -> bool:
 	var tick := TickManager.get_tick_of_day() if tick_of_day < 0 else tick_of_day
 	@warning_ignore("integer_division")
@@ -669,6 +681,7 @@ func is_work_time(tick_of_day: int = -1) -> bool:
 	return tick >= start_tick and tick < end_tick
 
 
+## 接收一次成功工作结果，保存副本、累计次数并发出结算信号。
 func accept_work_result(result: Dictionary) -> bool:
 	if not is_placed or result.is_empty():
 		return false
@@ -703,6 +716,7 @@ func try_withdraw_items(
 	return MaterialSystem.withdraw_items(inventory, item_type, quantity, holder)
 
 
+## 逐刻检查雇员资格，并辞退不再满足永久雇佣条件的居民。
 func _recheck_employees() -> void:
 	var invalid: Array[Human] = []
 	for human in employees:
@@ -712,6 +726,7 @@ func _recheck_employees() -> void:
 		dismiss_employee(human, "永久雇佣资格失效")
 
 
+## 根据目标人数补招或辞退雇员。
 func _adjust_worker_count() -> void:
 	var target := clampi(target_workers, 0, max_workers)
 	if employees.size() > target:
@@ -720,6 +735,7 @@ func _adjust_worker_count() -> void:
 		_fill_vacancies(target - employees.size())
 
 
+## 从世界中按顺序雇佣最多 [param vacancy_count] 名合格居民。
 func _fill_vacancies(vacancy_count: int) -> void:
 	for human in TickManager.humans:
 		if vacancy_count <= 0:
@@ -728,6 +744,7 @@ func _fill_vacancies(vacancy_count: int) -> void:
 			vacancy_count -= 1
 
 
+## 随机辞退最多 [param excess_count] 名现有雇员。
 func _dismiss_excess(excess_count: int) -> void:
 	while excess_count > 0 and not employees.is_empty():
 		var index := randi_range(0, employees.size() - 1)
@@ -735,12 +752,14 @@ func _dismiss_excess(excess_count: int) -> void:
 		excess_count -= 1
 
 
+## 幂等清理建筑生命周期：结束雇佣、注销更新、恢复占格并清算库存。
 func _prepare_for_removal() -> void:
 	if _lifecycle_cleaned:
 		return
 	_lifecycle_cleaned = true
 
 	if not MaterialSystem.is_scene_shutdown():
+		# 正常拆建筑必须逐个结束雇佣，让居民取消工作并释放相关账本记录。
 		var current_employees := employees.duplicate()
 		for human in current_employees:
 			dismiss_employee(human, "雇主建筑已删除")
@@ -748,6 +767,7 @@ func _prepare_for_removal() -> void:
 	TickManager.unregister_building(self)
 
 	if is_placed:
+		# 只有已放置建筑曾经占用网格，恢复时也必须限制在世界边界内。
 		var world := WorldGridGlobal.world
 		for cell in get_occupied_cells():
 			if world.is_in_bounds(cell):
