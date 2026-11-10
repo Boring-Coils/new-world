@@ -52,9 +52,9 @@ signal work_result_received(building: Building, result: Dictionary)
 ## 建筑类型 → 图标贴图（放在 Assets/Icons/ 下，改图标只要换图）
 const GLYPH_TEXTURES: Dictionary = {
 	GlobalEnum.BuildingType.WATER: preload("res://Assets/Icons/water.png"),
-	GlobalEnum.BuildingType.FOOD: preload("res://Assets/Icons/food.png"),
-	GlobalEnum.BuildingType.WORK: preload("res://Assets/Icons/work.png"),
-	GlobalEnum.BuildingType.WAREHOUSE: preload("res://Assets/Icons/work.png"),
+	GlobalEnum.BuildingType.FOOD: preload("res://Assets/Icons/food_station.svg"),
+	GlobalEnum.BuildingType.WORK: preload("res://Assets/Icons/scrap_sorting_station.svg"),
+	GlobalEnum.BuildingType.WAREHOUSE: preload("res://Assets/Icons/warehouse.svg"),
 }
 
 ## 可选的库存容量。0 表示没有库存能力。
