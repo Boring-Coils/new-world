@@ -5,6 +5,10 @@
 实现级细节以 [`设计/README.md`](设计/README.md) 和同目录专题文档为准；两者冲突时，
 按设计目录修订后的状态转换、脚本骨架和验收标准实施。
 
+> 当前代码差异：本文写作时的工作站类名是 `WorkStation`，当前代码使用
+> `ScrapSortingStation`；工作周期由 `HumanWorkBehavior` 管理，结算物品由
+> `CarryBag` 持有。文中 `WorkStation` 应按当前具体工作站理解。
+
 ## 1. 设计结论
 
 `HumanAI` 是居民的“决策与行动协调器”，不是整个居民的调度中心。
@@ -33,7 +37,7 @@
 | `HumanVisual` | 动画、朝向、服装、显示和隐藏 | 决策、寻路、Buff 效果 |
 | `BuffSystem` | Buff 增加、计时、到期和效果汇总 | 选择居民目标、控制居民移动 |
 | `TickManager` | 全局刻调度、建筑列表和时间常量 | 单个居民的决策 |
-| `Building` / `WorkStation` | 建筑状态、等待时间、工作站占用名单 | 居民 AI 状态 |
+| `Building` / `ScrapSortingStation` | 建筑状态、等待时间、工作站占用名单 | 居民 AI 状态 |
 
 ## 3. 对外接口
 
@@ -152,7 +156,7 @@ AI 必须响应以下移动信号：
 
 1. 决策树返回 `WORK`，同时确认 `BuffSystem.can_work()`。
 2. 前往工作站并等待。
-3. 等待完成后调用 `WorkStation.enter()`。
+3. 等待完成后调用具体工作站的 `enter()`。
 4. 进入 `WORKING`。
 5. 每刻检查工作资格和生存需求。
 6. 生存中断时先确认新目标路线可达，再经 `LEAVING_WORK` 原子离站；
@@ -173,7 +177,7 @@ AI 必须响应以下移动信号：
 
 1. 以当前建筑的所有出入口为起点寻找通往目标的最短路径。
 2. 没有可达路径时返回失败，建筑占用、`Human.in_building`、位置和显示状态全部不变。
-3. 找到路径后，从 `WorkStation.occupants` 移除居民。
+3. 找到路径后，从具体工作站的占用名单移除居民。
 4. 把居民位置直接设置到选中的出口格。
 5. 清空 `Human.in_building`。
 6. 恢复显示并开始沿路径移动。
@@ -193,12 +197,12 @@ AI 不应在调用 `move_to_building()` 前自行执行 `leave()` 或 `show()`�
 | `HumanMotion` | 移动命令、最近建筑查询、预计 tick、`on_tick()` 和移动信号 |
 | `TickManager` | 建筑列表、游戏时间常量 |
 | `Building` | 建筑类型、等待刻数、出入口 |
-| `WorkStation` | `enter()`、`leave()` |
+| `ScrapSortingStation` | `enter()`、`leave()` 和站内占用名单 |
 | 决策树 | 读取上下文并返回 Goal |
 | 状态机 | 保存状态、目标、等待时间和转换规则 |
 
-`HumanMotion` 在确认离站时会调用 `WorkStation.leave()`，但工作站的进入、占用名单
-结构和等待时间仍归 `WorkStation` 管理。
+`HumanMotion` 在确认离站时会调用具体工作站的 `leave()`，但进入、占用名单结构和
+等待时间仍归建筑实现管理。当前具体实现是 `ScrapSortingStation`。
 
 AI 不应直接访问 `WorldGrid`、修改 `Human.position`、维护路径索引或调用
 `HumanVisual.set_facing()`。
@@ -215,8 +219,8 @@ AI 不应直接访问 `WorldGrid`、修改 `Human.position`、维护路径索引
 | `BuffSelfTest` | `ai.goal` | 使用 AI 调试快照 |
 | `BuffSelfTest` | AI 的速度常量和速度函数 | 改从 `HumanMotion` 获取 |
 
-当前 `Human.tscn` 已经挂载了 `HumanAI` 节点，但 `Human.gd` 仍会额外创建一份
-AI，并且旧 `_init(host)` 与场景无参实例化冲突。重写时需要统一为一个场景实例。
+迁移已经完成：`Human.tscn` 只挂载一个场景内 `HumanAI`，`Human.gd` 通过
+`ai.bind(self)` 绑定，不再额外构造 AI。
 
 ## 9. 不应再提供的接口
 

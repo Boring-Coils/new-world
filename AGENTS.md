@@ -3,15 +3,18 @@
 本文件适用于整个仓库。开始修改前先阅读本指南，再结合相邻脚本和
 `project.godot` 确认真实行为。文档、代码注释和旧版设计稿可能落后于实现；
 遇到冲突时，以当前代码和最新的专项设计文档为准，并在相关改动中顺手修正明显失效的说明。
+当前版本、默认值和已知验收差异统一记录在
+[`Docs/当前实现状态.md`](Docs/当前实现状态.md)。
 
 ## 1. 项目定位
 
-这是一个使用 Godot 4.7 开发的 2D 殖民地模拟原型，当前项目版本为 `0.0.1.4`。
+这是一个使用 Godot 4.7 开发的 2D 殖民地模拟原型，当前项目版本为 `0.0.1.5`。
 
 - 主场景是 `Scenes/Colony.tscn`，集成检查场景是 `Scenes/TestScene.tscn`。
 - 游戏按“刻”推进，不是按帧推进；建筑、居民、Buff 和资源结算都与 `TickManager` 对齐。
 - 世界按正方形网格组织，`1 格 = 1 米`，`WorldGrid.CELL_SIZE = 10` 像素。
-- 当前核心循环是居民取水、取食、按雇佣关系上班、完成工作周期、消耗、Buff、物资结算和建筑放置。
+- 当前核心循环是居民取水、取食、按雇佣关系上班、锁定并携带工作需求、完成工作周期、
+  结算产出、消耗、Buff、物资清算和建筑放置。
 - 项目没有自动化测试框架、格式化工具或静态检查工具，验证主要依赖 Godot
   无头运行、日志断言和编辑器人工检查。
 
@@ -36,11 +39,11 @@ godot --headless --path . Scenes/TestScene.tscn -- --autoplace --speed=20 --max-
 # Buff 链路检查
 godot --headless --path . Scenes/TestScene.tscn -- --bufftest --speed=20 --max-ticks=140
 
-# v0.0.1.4 完整验收（逐项输出 PASS/FAIL）
-godot --headless --path . --log-file .godot/v014_acceptance.log --scene res://Scenes/TestScene.tscn -- --acceptance
+# v0.0.1.5 完整验收（逐项输出 PASS/FAIL）
+godot --headless --path . --log-file .godot/v015_acceptance.log --scene res://Scenes/TestScene.tscn -- --acceptance
 
 # 导出调试版，输出目录被 .gitignore 忽略
-godot --headless --path . --export-debug "Windows Desktop" build/0.0.1.4/new_world.exe
+godot --headless --path . --export-debug "Windows Desktop" build/0.0.1.5/new_world.exe
 ```
 
 `Scenes/TestScene.tscn` 的测试参数位于引擎参数分隔符 `--` 之后。常用的用户参数有：
@@ -51,7 +54,7 @@ godot --headless --path . --export-debug "Windows Desktop" build/0.0.1.4/new_wor
 | `--max-ticks=600` | 跑满指定刻数后退出；无头测试必须提供，避免进程不退出 |
 | `--autoplace` | 自动放置建筑和居民，检查合法放置、非法放置、重叠和挤出逻辑 |
 | `--bufftest` | 在固定刻数添加疲劳、眩晕和口渴，检查倍率、工作闸门和到期 |
-| `--acceptance` | 运行 v0.0.1.4 全部雇佣、班次、周期、库存、清算和 UI 契约自检 |
+| `--acceptance` | 运行 v0.0.1.5 的雇佣、班次、周期、背包、拆除、旋转、库存、清算、UI 和模拟自检 |
 | `--shot=路径.png` | 在满足条件时截取当前画面；视觉检查仍优先使用编辑器窗口 |
 
 运行后不要只看退出码。Godot 可能出现脚本错误但进程仍然结束的情况，必须检查输出里是否含有
@@ -70,8 +73,8 @@ Scripts/
   Core/                    刻调度、物资账本和全局时间规则
   World/                   世界骨架、殖民地、相机和放置控制
   Grid/                    全局网格、寻路、格子坐标换算和网格显示
-  Building/                建筑基类、取水站、取食站、工作站、仓库
-  Human/                   居民实体、移动、表现、AI、状态基类、工作行为
+  Building/                建筑基类、取水站、取食站、废料分拣站、仓库
+  Human/                   居民实体、移动、表现、AI、状态基类、工作行为、随身背包
   Buff/                    Buff 系统、基类和具体 Buff
   Material/                物品、库存、工作类型和工作周期数据模型
   UI/                      建筑详情页
@@ -145,6 +148,9 @@ build/                     本地导出目录，不提交
 
 - `Building.can_place_at()` 只校验，不修改世界。
 - `Building.place_at()` 校验成功后设置 `origin_cell`、占用网格并尝试注册到 `TickManager`。
+- `Building.rotation_steps` 表示四向朝向；旋转 90 度或 270 度时，
+  `get_footprint()` 返回宽高互换后的占格，出入口同步旋转。
+- `PlacementController` 在放置模式下按 `R` 顺时针旋转预览，并按新占格重新居中。
 
 建筑必须在世界范围内，本体每格可走，本体不能覆盖已有建筑入口。自己的入口必须在建筑外、
 与建筑边相邻、在世界内且可走；不同建筑的入口可以重叠。只有 `is_placed == true`
@@ -206,6 +212,18 @@ build/                     本地导出目录，不提交
 - 建筑详情页每刻刷新；不要在面板里为每种建筑写类型分支。
 - 放置模式下必须禁用已有建筑的点击区，否则建筑按钮会吞掉左键事件。
 - `DebugUI` 只负责显示和发出选择信号，实际放置由 `PlacementController` 完成。
+- 当前库存总览只显示容量、已用体积和已预留体积；虽然 `Inventory` 提供
+  `get_available_volume()`，详情页尚未显示“可用体积”行。
+
+### 4.9 居民背包与物资归属
+
+- 同一份物资在任一时刻只存在于已登记库存或某个 `CarryBag` 中，不能同时存在两处。
+- `MaterialSystem.take_locked()` 成功时从库存扣除数量、写入居民背包，并关闭对应需求锁。
+- 周期结算必须核对居民背包实物；已完成或已取消的周期不得重复结算。
+- 取消周期时，已取出的需求按锁记录退回来源库存；来源失效时按距离转移。
+- 居民离场时由工作行为和 `_exit_tree()` 兜底清空背包；清算距离优先使用雇主左上角，
+  没有雇主时使用等待锚点，不使用死亡位置。
+- `CarryBag` 当前没有容量上限、负重规则或玩家可见背包界面。
 
 ## 5. 编码规范
 
@@ -275,13 +293,26 @@ godot --headless --path . Scenes/TestScene.tscn -- --bufftest --speed=20 --max-t
 
 核对疲劳层数与速度倍率、眩晕工作闸门、口渴逐刻扣水和自动到期。新增 Buff 时同步扩展自检。
 
-### 7.5 人工验证
+### 7.5 完整验收
+
+```powershell
+godot --headless --path . --log-file .godot/v015_acceptance.log --scene res://Scenes/TestScene.tscn -- --acceptance
+```
+
+当前共 103 项：18 个雇佣、8 个班次/等待、19 个工作周期、11 个居民背包、
+5 个建筑拆除、4 个建筑旋转、19 个库存、10 个清算、7 个 UI 契约、
+1 个真实模拟和 1 个物资账本日志检查。
+
+当前基线为 `102/103`，唯一失败项 `UI-03` 来自库存详情行和验收断言不一致。
+修改相关 UI 或验收代码前不要把完整验收标记为全部通过。
+
+### 7.6 人工验证
 
 以下改动还必须在编辑器中或可交互运行中检查：
 
 - 相机拖动、缩放和快捷键。
 - UI 布局、窗口缩放、文本截断、按钮点击区和层级遮挡。
-- 建筑预览、连续放置、右键或 ESC 取消。
+- 建筑预览、`R` 旋转、连续放置、右键或 ESC 取消。
 - 居民动画、朝向、进出工作站时的显示状态。
 - 截图和实际画面是否与逻辑状态一致。
 
@@ -318,4 +349,8 @@ refactor: 将居民移动逻辑迁移到 HumanMotion
 - `WorldGrid.world_to_cell()` 会把世界外坐标夹到边界格，做严格范围校验时应先用 `is_in_bounds()`。
 - 预览建筑不能注册、不能占格，也不能接收会吞掉放置点击的鼠标事件。
 - 居民必须从场景实例化；直接构造会丢失组件。
+- 当前代码没有 `WorkStation` 类；具体工作站是 `ScrapSortingStation`，历史文档中的类名需要按此映射。
+- `ScrapSortingStation` 类默认 `target_workers = 0`；`TestScene` 会显式设为 `3`，不要据此推断新建筑会自动招聘。
+- 当前库存详情没有“可用体积”行，完整验收 `UI-03` 会失败；`Inventory.get_available_volume()` 本身可用。
+- 取出工作需求后，物资位于 `Human.carry`；调试库存前先核对背包，避免重复记账。
 - 无头运行没有人工画面判断，UI、相机、动画和输入仍需单独验证。

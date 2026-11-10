@@ -1,5 +1,8 @@
 # HumanAI 原实现交互与接口分析
 
+> 历史记录：本文分析的是重构前 `RefCounted` 版 AI，不代表当前 `Node` 状态机实现。
+> 其中 `WorkStation` 对应当前代码的 `ScrapSortingStation`。
+
 > 分析对象：`Scripts/Human/HumanAI.gd`
 >
 > 分析范围：当前工作区中的原居民 AI，以及仓库内所有对 `HumanAI` 的引用
