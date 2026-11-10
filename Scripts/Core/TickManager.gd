@@ -78,7 +78,8 @@ func advance_tick() -> void:
 		if is_instance_valid(b):
 			b.on_tick()
 	for h in humans:
-		if is_instance_valid(h):
+		# 已经排进删除队列的居民本帧内仍然"有效"，跳过它避免死人继续消耗与开工。
+		if is_instance_valid(h) and not h.is_queued_for_deletion():
 			h.on_tick()
 
 	tick_advanced.emit(total_ticks, get_day(), get_tick_of_day())

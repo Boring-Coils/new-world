@@ -42,9 +42,28 @@ func begin_scene_shutdown() -> void:
 	_scene_shutdown = true
 
 
-## 返回场景当前是否处于关闭阶段。
+## 返回账本当前保存的锁记录数量，包含已关闭但尚未清理的记录。[br]
+## 用于验证长时间运行后记录不会只增不减。
+func get_tracked_lock_count() -> int:
+	return _locks.size()
+
+
+## 返回账本当前保存的产出预留记录数量，包含已关闭但尚未清理的记录。
+func get_tracked_reservation_count() -> int:
+	return _reservations.size()
+
+
+## 返回场景当前是否处于关闭阶段。[br]
+## 除显式标记外，也把"场景根已排进删除队列"视作正在拆除：Godot 先执行子节点退出，
+## 父节点 [World] 的 _exit_tree 来不及在建筑清理前标记。
 func is_scene_shutdown() -> bool:
-	return _scene_shutdown
+	if _scene_shutdown:
+		return true
+	var tree := get_tree()
+	if tree == null:
+		return false
+	var scene := tree.current_scene
+	return scene != null and is_instance_valid(scene) and scene.is_queued_for_deletion()
 
 
 ## 清空所有库存登记、锁、预留和编号计数器。[br]
@@ -214,8 +233,9 @@ func lock_items(
 
 ## 从库存实际取出先前锁定的物品。[br]
 ## [param lock_id] 是 [method lock_items] 返回的锁标识。[br]
+## [param carrier] 是接收物资的居民背包；提供时物品进入背包、锁随即关闭，回滚责任转交背包。[br]
 ## 同一锁重复调用会幂等返回 [code]true[/code]；库存失效或数量不足时标记锁无效并返回 [code]false[/code]。
-func take_locked(lock_id: String) -> bool:
+func take_locked(lock_id: String, carrier: CarryBag = null) -> bool:
 	var lock: Dictionary = _locks.get(lock_id, {})
 	if lock.is_empty() or not bool(lock["valid"]) or bool(lock["closed"]):
 		return false
@@ -233,6 +253,10 @@ func take_locked(lock_id: String) -> bool:
 		return false
 	inventory.remove_items_unchecked(item_type, quantity)
 	lock["taken"] = true
+	if carrier != null:
+		# 物品已经进了背包，锁的使命到此结束；取消或结算时由背包负责。
+		carrier.add_items({item_type: quantity})
+		lock["closed"] = true
 	inventory_changed.emit(inventory)
 	return true
 
@@ -306,6 +330,8 @@ func release_lock(lock_id: String) -> void:
 			)
 	elif is_inventory_registered(source):
 		inventory_changed.emit(source)
+	# 已经关闭的锁不再变化，直接删掉记录，避免长时间运行时账本只增不减。
+	_locks.erase(lock_id)
 	return
 
 
@@ -416,6 +442,7 @@ func release_reservation(reservation_id: String) -> void:
 			0,
 		)
 		inventory_changed.emit(inventory)
+	_reservations.erase(reservation_id)
 
 
 ## 依次释放一组预留，忽略不存在或已关闭的标识。[br]
@@ -482,14 +509,20 @@ func replace_invalid_reservations(
 ## [param cycle] 是已经锁定需求并等待结算的工作周期。[br]
 ## 成功时消耗需求锁、释放产出预留并返回 [code]true[/code]；任一预检失败则不改动物资。
 func settle_cycle(cycle: WorkCycle) -> bool:
-	if cycle == null:
+	if cycle == null or cycle.is_finished():
 		return false
-	for lock_id in cycle.demand_locks:
-		var lock := get_lock(lock_id)
-		if lock.is_empty() or not bool(lock["valid"]) or not bool(lock["taken"]):
+	var carrier := _get_cycle_carrier(cycle)
+	if carrier != null:
+		# 有背包时以背包实物为准；锁只负责取货之前的防抢。
+		if not carrier.has_at_least(cycle.work_type.demand):
 			return false
+	else:
+		for lock_id in cycle.demand_locks:
+			var lock := get_lock(lock_id)
+			if lock.is_empty() or not bool(lock["valid"]) or not bool(lock["taken"]):
+				return false
 
-	# 先检查所有需求锁，避免部分消耗后才发现周期无法结算。
+	# 先检查全部需求，避免部分消耗后才发现周期无法结算。
 	var output_volume := cycle.work_type.get_output_volume()
 	var reserved_destinations := _get_reservation_destinations(cycle.output_reservations)
 	var reserved_volume := 0
@@ -511,11 +544,21 @@ func settle_cycle(cycle: WorkCycle) -> bool:
 		return false
 
 	# 通过最终预检后才真正消耗需求并释放预留。
-	for lock_id in cycle.demand_locks:
-		if not consume_locked(lock_id):
-			return false
+	if carrier != null:
+		for item_type in cycle.work_type.demand:
+			carrier.remove_items(
+				int(item_type),
+				maxi(int(cycle.work_type.demand[item_type]), 0),
+			)
+	else:
+		for lock_id in cycle.demand_locks:
+			if not consume_locked(lock_id):
+				return false
 	for reservation_id in cycle.output_reservations:
 		release_reservation(reservation_id)
+	for lock_id in cycle.demand_locks:
+		_locks.erase(lock_id)
+	cycle.demand_locks.clear()
 
 	var remaining_output := _allocate_items(cycle.work_type.output, destinations)
 	if not _is_empty_items(remaining_output):
@@ -530,11 +573,64 @@ func settle_cycle(cycle: WorkCycle) -> bool:
 func cancel_cycle(cycle: WorkCycle) -> void:
 	if cycle == null:
 		return
+	release_carried(cycle)
 	release_locks(cycle.demand_locks)
 	release_reservations(cycle.output_reservations)
 	cycle.demand_locks.clear()
 	cycle.output_reservations.clear()
 	cycle.status = WorkCycle.Status.CANCELLED
+
+
+## 返回周期所属居民的有效背包；居民未绑定或已销毁时返回 null。[br]
+## [param cycle] 是待查询的工作周期。
+func _get_cycle_carrier(cycle: WorkCycle) -> CarryBag:
+	if cycle == null or not is_instance_valid(cycle.human):
+		return null
+	return cycle.human.carry
+
+
+## 把周期已经取走的物资从背包退回来源库存。[br]
+## [param cycle] 是被取消的工作周期；没有背包或尚未取走时不做任何事。
+func release_carried(cycle: WorkCycle) -> void:
+	var carrier := _get_cycle_carrier(cycle)
+	if carrier == null:
+		return
+	for lock_id in cycle.demand_locks:
+		var lock: Dictionary = _locks.get(lock_id, {})
+		if lock.is_empty() or not bool(lock["taken"]):
+			continue
+		var item_type := int(lock["item_type"])
+		var restored := carrier.remove_items(item_type, int(lock["quantity"]))
+		if restored <= 0:
+			continue
+		_return_to_source(lock, item_type, restored)
+
+
+## 把背包里剩余的物资按来源格路由回仓库，用于居民死亡或离场的兜底。[br]
+## [param carrier] 是待清空的背包。[br]
+## [param source_origin] 是选择就近仓库的距离起点。
+func dump_carried(carrier: CarryBag, source_origin: Vector2i) -> void:
+	if carrier == null:
+		return
+	var items := carrier.clear_items()
+	if not items.is_empty():
+		_route_items(items, source_origin, -1)
+
+
+## 把一批物资退回锁记录的来源库存；来源已失效时按距离转移。[br]
+## [param lock] 是取货时留下的锁记录。[br]
+## [param item_type] 与 [param quantity] 是退回的物资类型和数量。
+func _return_to_source(lock: Dictionary, item_type: int, quantity: int) -> void:
+	var source: Inventory = lock["inventory"]
+	if source != null and is_instance_valid(source) and is_inventory_registered(source):
+		if source.add_items_unchecked({item_type: quantity}):
+			inventory_changed.emit(source)
+			return
+	var origin := lock["source_origin"] as Vector2i
+	var exclude_id := -1
+	if source != null and is_instance_valid(source):
+		exclude_id = source.inventory_id
+	_route_items({item_type: quantity}, origin, exclude_id)
 
 
 ## 清空并注销某个所有者库存，再把其中物资转移到其他仓库。[br]

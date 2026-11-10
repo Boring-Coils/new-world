@@ -50,6 +50,9 @@ var employer: Building = null
 ## 等待点附近的稳定个人偏移，绝对值不超过半格（5 像素）。
 var wait_offset: Vector2 = Vector2.ZERO
 
+## 随身携带的物资；取货后物品从库存转入这里，结算或取消时再交出去。
+var carry: CarryBag = CarryBag.new()
+
 
 ## 居民必须从场景实例化，否则会缺少 AI、Motion 和 BuffSystem。[br]
 ## 返回从居民场景实例化出的完整居民节点。
@@ -74,11 +77,17 @@ func _ready() -> void:
 
 ## 离开场景时取消工作与雇佣关系，并注销每刻更新。
 func _exit_tree() -> void:
+	# 离开场景前先记下归属建筑的左上角，清算背包时用它选仓库，而不是用死亡位置。
+	var bag_origin := WorldGridGlobal.world.world_to_cell(World.WAIT_PLACE)
+	if is_instance_valid(employer):
+		bag_origin = employer.origin_cell
 	if is_instance_valid(ai):
 		ai.cleanup_before_removal()
 	if is_instance_valid(employer):
 		employer.dismiss_employee(self, "居民离开场景")
 		employer = null
+	if carry != null and not carry.is_empty():
+		MaterialSystem.dump_carried(carry, bag_origin)
 	TickManager.unregister_human(self)
 
 

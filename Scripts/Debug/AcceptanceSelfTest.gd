@@ -53,6 +53,7 @@ func _run() -> void:
 	await _test_employment()
 	await _test_schedule_and_waiting()
 	await _test_work_cycles()
+	await _test_carry()
 	await _test_inventory()
 	await _test_cleanup()
 	await _test_ui_contract()
@@ -544,6 +545,30 @@ func _test_schedule_and_waiting() -> void:
 		"offsets=%s" % [waiters.map(func(h: Human) -> Vector2: return h.wait_offset)],
 	)
 
+	# 已站在等待点时不应每个决策刻重新挑一次等待目标，否则会原地反复移动。
+	waiting_worker.water = Human.MAX_WATER
+	waiting_worker.food = Human.MAX_FOOD
+	waiting_worker.ai.clear_goal()
+	var stays_waiting := true
+	for _slot in range(3):
+		waiting_worker.ai.force_next_decision()
+		waiting_worker.ai.try_select_idle_goal()
+		if (
+			waiting_worker.ai.get_goal() != HumanAI.Goal.NONE
+			or waiting_worker.motion.is_moving()
+		):
+			stays_waiting = false
+	_check(
+		"SCH-08",
+		stays_waiting and bool(waiting_worker.ai.get("_at_wait_place")),
+		"到达等待点后保持空闲，不再重复挑选等待目标",
+		"goal=%s moving=%s at_wait=%s" % [
+			HumanAI.Goal.keys()[waiting_worker.ai.get_goal()],
+			waiting_worker.motion.is_moving(),
+			waiting_worker.ai.get("_at_wait_place"),
+		],
+	)
+
 	waiting_worker.water = 10.0
 	waiting_worker.ai.force_next_decision()
 	waiting_worker.ai.set("_at_wait_place", true)
@@ -1030,6 +1055,292 @@ func _test_work_cycles() -> void:
 			station.inventory.get_item_count(MaterialTypes.ItemType.WIRE),
 			station.work_result_count,
 		],
+	)
+	await _dispose_tracked()
+
+	# 返岗途中下班：到达雇主时已过班次，周期必须取消并把结果返回给调用方。
+	TickManager.total_ticks = 600
+	origin = _next_origin()
+	station = _create_workstation(origin, {
+		MaterialTypes.ItemType.METAL: 1,
+	}, {}, 1, 1)
+	_create_test_warehouse(origin + Vector2i(20, 0), {
+		MaterialTypes.ItemType.METAL: 1,
+	})
+	worker = _spawn_human(origin + Vector2i(2, 5), GlobalEnum.AgeStatus.ADULT, 30)
+	station.hire_employee(worker)
+	behavior = worker.ai.get_work_behavior()
+	var locks_before_return := MaterialSystem.get_open_lock_count()
+	var reservations_before_return := MaterialSystem.get_open_reservation_count()
+	started = behavior.begin(station)
+	var acquiring_ok := started and behavior.get_phase_name() == &"acquiring"
+	behavior.on_motion_arrived()
+	var returning_ok := behavior.get_phase_name() == &"returning"
+	TickManager.total_ticks = 1500
+	var cycle_alive_at_arrival := behavior.on_motion_arrived()
+	_check(
+		"CYCLE-19",
+		acquiring_ok
+		and returning_ok
+		and not cycle_alive_at_arrival
+		and not behavior.is_busy()
+		and MaterialSystem.get_open_lock_count() == locks_before_return
+		and MaterialSystem.get_open_reservation_count() == reservations_before_return,
+		"返岗途中下班时取消周期并返回失效",
+		"acquiring=%s returning=%s alive=%s busy=%s locks_delta=%d reservations_delta=%d" % [
+			acquiring_ok,
+			returning_ok,
+			cycle_alive_at_arrival,
+			behavior.is_busy(),
+			MaterialSystem.get_open_lock_count() - locks_before_return,
+			MaterialSystem.get_open_reservation_count() - reservations_before_return,
+		],
+	)
+	TickManager.total_ticks = 600
+	await _dispose_tracked()
+
+
+## 验证居民背包在取货、结算、取消和离场时的物资归属。
+func _test_carry() -> void:
+	TickManager.total_ticks = 600
+	var origin := _next_origin()
+	var station := _create_workstation(origin, {
+		MaterialTypes.ItemType.METAL: 1,
+	}, {
+		MaterialTypes.ItemType.WIRE: 1,
+	}, 1, 1)
+	var warehouse := _create_test_warehouse(origin + Vector2i(20, 0), {
+		MaterialTypes.ItemType.METAL: 2,
+	})
+	var worker := _spawn_human(origin + Vector2i(2, 5), GlobalEnum.AgeStatus.ADULT, 30)
+	station.hire_employee(worker)
+	var behavior := worker.ai.get_work_behavior()
+	var warehouse_before := warehouse.inventory.get_item_count(MaterialTypes.ItemType.METAL)
+	var started := behavior.begin(station)
+	var acquiring := behavior.get_phase_name() == &"acquiring"
+	behavior.on_motion_arrived()
+	var carried := worker.carry.get_item_count(MaterialTypes.ItemType.METAL)
+	_check(
+		"CARRY-01",
+		started
+		and acquiring
+		and carried == 1
+		and warehouse.inventory.get_item_count(MaterialTypes.ItemType.METAL) == warehouse_before - 1,
+		"取货后物资从仓库转入居民背包",
+		"started=%s phase=%s carried=%d warehouse=%d" % [
+			started,
+			behavior.get_phase_name(),
+			carried,
+			warehouse.inventory.get_item_count(MaterialTypes.ItemType.METAL),
+		],
+	)
+
+	var finished_cycle := behavior.cycle
+	behavior.on_motion_arrived()
+	var locked := behavior.get_phase_name() == &"locked"
+	behavior.tick()
+	_check(
+		"CARRY-02",
+		locked
+		and behavior.cycle == null
+		and worker.carry.is_empty()
+		and station.inventory.get_item_count(MaterialTypes.ItemType.WIRE) == 1,
+		"结算消耗背包物资并写入产出",
+		"locked=%s carried=%s wire=%d" % [
+			locked,
+			carried,
+			station.inventory.get_item_count(MaterialTypes.ItemType.WIRE),
+		],
+	)
+
+	var repeated := MaterialSystem.settle_cycle(finished_cycle)
+	_check(
+		"CARRY-03",
+		not repeated and station.inventory.get_item_count(MaterialTypes.ItemType.WIRE) == 1,
+		"已完成周期重复结算被拒绝",
+		"repeated=%s wire=%d" % [repeated, station.inventory.get_item_count(MaterialTypes.ItemType.WIRE)],
+	)
+	await _dispose_tracked()
+
+	origin = _next_origin()
+	station = _create_workstation(origin, {
+		MaterialTypes.ItemType.METAL: 1,
+	}, {
+		MaterialTypes.ItemType.WIRE: 1,
+	}, 1, 1)
+	warehouse = _create_test_warehouse(origin + Vector2i(20, 0), {
+		MaterialTypes.ItemType.METAL: 1,
+	})
+	worker = _spawn_human(origin + Vector2i(2, 5), GlobalEnum.AgeStatus.ADULT, 30)
+	station.hire_employee(worker)
+	behavior = worker.ai.get_work_behavior()
+	behavior.begin(station)
+	behavior.on_motion_arrived()
+	var carried_before_cancel := worker.carry.get_item_count(MaterialTypes.ItemType.METAL)
+	behavior.cancel("测试取消")
+	_check(
+		"CARRY-04",
+		carried_before_cancel == 1
+		and worker.carry.is_empty()
+		and warehouse.inventory.get_item_count(MaterialTypes.ItemType.METAL) == 1,
+		"取消时背包物资退回来源仓库",
+		"carried=%d left=%s warehouse=%d" % [
+			carried_before_cancel,
+			worker.carry.get_items(),
+			warehouse.inventory.get_item_count(MaterialTypes.ItemType.METAL),
+		],
+	)
+	await _dispose_tracked()
+
+	origin = _next_origin()
+	station = _create_workstation(origin, {
+		MaterialTypes.ItemType.METAL: 1,
+	}, {
+		MaterialTypes.ItemType.WIRE: 1,
+	}, 1, 1)
+	warehouse = _create_test_warehouse(origin + Vector2i(20, 0), {
+		MaterialTypes.ItemType.METAL: 1,
+	})
+	worker = _spawn_human(origin + Vector2i(2, 5), GlobalEnum.AgeStatus.ADULT, 30)
+	station.hire_employee(worker)
+	behavior = worker.ai.get_work_behavior()
+	behavior.begin(station)
+	behavior.on_motion_arrived()
+	worker.die()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_check(
+		"CARRY-05",
+		warehouse.inventory.get_item_count(MaterialTypes.ItemType.METAL) == 1,
+		"居民离场时背包物资退回来源仓库",
+		"warehouse=%d" % warehouse.inventory.get_item_count(MaterialTypes.ItemType.METAL),
+	)
+	await _dispose_tracked()
+
+	origin = _next_origin()
+	station = _create_workstation(origin, {}, {}, 1, 1)
+	worker = _spawn_human(origin + Vector2i(2, 5), GlobalEnum.AgeStatus.ADULT, 30)
+	var eligible_before_death := station.can_accept_employee(worker)
+	worker.die()
+	var rejects_queued := not station.can_accept_employee(worker)
+	_check(
+		"CARRY-06",
+		eligible_before_death and rejects_queued,
+		"已排进删除队列的居民不再被建筑录用",
+		"before=%s after=%s" % [eligible_before_death, rejects_queued],
+	)
+	await _dispose_tracked()
+
+	# 待结算期间背包物资丢失：必须取消，而不是永远停在待结算。
+	origin = _next_origin()
+	station = _create_workstation(origin, {
+		MaterialTypes.ItemType.METAL: 1,
+	}, {
+		MaterialTypes.ItemType.WIRE: 1,
+	}, 1, 1)
+	warehouse = _create_test_warehouse(origin + Vector2i(20, 0), {
+		MaterialTypes.ItemType.METAL: 1,
+	})
+	worker = _spawn_human(origin + Vector2i(2, 5), GlobalEnum.AgeStatus.ADULT, 30)
+	station.hire_employee(worker)
+	behavior = worker.ai.get_work_behavior()
+	behavior.begin(station)
+	behavior.on_motion_arrived()
+	worker.carry.clear_items()
+	behavior.on_motion_arrived()
+	var pending_reached := false
+	var cancelled_result := &""
+	for _step in range(2):
+		var result := behavior.tick()
+		if behavior.get_phase_name() == &"pending_settlement":
+			pending_reached = true
+		if result == &"cancelled":
+			cancelled_result = result
+	_check(
+		"CARRY-07",
+		pending_reached and cancelled_result == &"cancelled" and behavior.cycle == null,
+		"待结算期间背包物资丢失时取消周期",
+		"pending=%s result=%s wire=%d" % [
+			pending_reached,
+			cancelled_result,
+			station.inventory.get_item_count(MaterialTypes.ItemType.WIRE),
+		],
+	)
+	await _dispose_tracked()
+
+	# 账本记录不应随周期完成而累积。
+	origin = _next_origin()
+	station = _create_workstation(origin, {
+		MaterialTypes.ItemType.METAL: 1,
+	}, {
+		MaterialTypes.ItemType.WIRE: 1,
+	}, 1, 1)
+	warehouse = _create_test_warehouse(origin + Vector2i(20, 0), {
+		MaterialTypes.ItemType.METAL: 1,
+	})
+	worker = _spawn_human(origin + Vector2i(2, 5), GlobalEnum.AgeStatus.ADULT, 30)
+	station.hire_employee(worker)
+	behavior = worker.ai.get_work_behavior()
+	var locks_before_cycle := MaterialSystem.get_tracked_lock_count()
+	var reservations_before_cycle := MaterialSystem.get_tracked_reservation_count()
+	behavior.begin(station)
+	behavior.on_motion_arrived()
+	behavior.on_motion_arrived()
+	behavior.tick()
+	_check(
+		"CARRY-08",
+		MaterialSystem.get_tracked_lock_count() == locks_before_cycle
+		and MaterialSystem.get_tracked_reservation_count() == reservations_before_cycle
+		and station.inventory.get_item_count(MaterialTypes.ItemType.WIRE) == 1,
+		"周期结算后不遗留锁与预留记录",
+		"locks_delta=%d reservations_delta=%d wire=%d" % [
+			MaterialSystem.get_tracked_lock_count() - locks_before_cycle,
+			MaterialSystem.get_tracked_reservation_count() - reservations_before_cycle,
+			station.inventory.get_item_count(MaterialTypes.ItemType.WIRE),
+		],
+	)
+	await _dispose_tracked()
+
+	# 取料途中紧急缺水：准备阶段应允许离开去补给。
+	origin = _next_origin()
+	station = _create_workstation(origin, {
+		MaterialTypes.ItemType.METAL: 1,
+	}, {
+		MaterialTypes.ItemType.WIRE: 1,
+	}, 1, 1)
+	warehouse = _create_test_warehouse(origin + Vector2i(20, 0), {
+		MaterialTypes.ItemType.METAL: 1,
+	})
+	worker = _spawn_human(origin + Vector2i(2, 5), GlobalEnum.AgeStatus.ADULT, 30)
+	station.hire_employee(worker)
+	behavior = worker.ai.get_work_behavior()
+	behavior.begin(station)
+	worker.water = 0.0
+	worker.ai.set("_goal", HumanAI.Goal.WORK)
+	worker.ai.set("_target", station)
+	# 决策快照平时由每刻刷新，这里直接刷新一次，让缺水判定读到最新数值。
+	worker.ai.get("_context").refresh(worker)
+	var interrupt := worker.ai.evaluate_work_interrupt()
+	_check(
+		"CARRY-09",
+		interrupt == HumanAI.WorkInterrupt.TRAVEL and behavior.get_phase_name() == &"acquiring",
+		"取料途中紧急缺水时允许离开准备阶段",
+		"interrupt=%d phase=%s" % [interrupt, behavior.get_phase_name()],
+	)
+	behavior.cancel("测试结束")
+	await _dispose_tracked()
+
+	# 已排队删除的居民不再被每刻更新。
+	worker = _spawn_human(_next_origin(), GlobalEnum.AgeStatus.ADULT, 30)
+	worker.water = 60.0
+	worker.die()
+	var water_before_tick := worker.water
+	TickManager.advance_tick()
+	_check(
+		"CARRY-10",
+		is_zero_approx(worker.water - water_before_tick),
+		"待删除居民不再被每刻更新",
+		"before=%.2f after=%.2f" % [water_before_tick, worker.water],
 	)
 	await _dispose_tracked()
 

@@ -130,18 +130,23 @@ func tick() -> StringName:
 		if cycle.remaining_ticks <= 0:
 			return _settle()
 	elif phase == Phase.PENDING_SETTLEMENT:
+		# 待结算期间背包里的实物可能已经丢失，先校验再尝试结算，避免永久卡住。
+		if not _validate_pending_cycle():
+			cancel("待结算期间需求物资已丢失")
+			return &"cancelled"
 		return _settle()
 	return &""
 
 
-## 响应移动到达事件，推进取料仓库序列或开始返岗/工作。
-func on_motion_arrived() -> void:
+## 响应移动到达事件，推进取料仓库序列或开始返岗/工作。[br]
+## 路线或锁定启动失败时会取消周期，返回周期是否仍在进行中；调用方需据此通知状态机。
+func on_motion_arrived() -> bool:
 	if cycle == null:
-		return
+		return false
 	if phase == Phase.ACQUIRING:
 		if _source_index >= _source_inventories.size():
 			_route_to_employer()
-			return
+			return is_busy()
 		_take_locks_at(_source_inventories[_source_index])
 		_source_index += 1
 		if _source_index < _source_inventories.size():
@@ -150,6 +155,7 @@ func on_motion_arrived() -> void:
 			_route_to_employer()
 	elif phase == Phase.RETURNING_TO_WORK:
 		_start_locked()
+	return is_busy()
 
 
 ## 取料或返岗路线失败时取消当前工作周期。
@@ -281,7 +287,7 @@ func _take_locks_at(inventory: Inventory) -> void:
 			continue
 		var lock_inventory: Inventory = lock["inventory"]
 		if lock_inventory == inventory and not bool(lock["taken"]):
-			MaterialSystem.take_locked(lock_id)
+			MaterialSystem.take_locked(lock_id, human.carry)
 
 
 ## 完成全部前置校验后进入锁定阶段并尝试进入工作站内部。[br]
@@ -305,6 +311,16 @@ func _start_locked() -> bool:
 		human.in_building = cycle.employer
 		human.set_world_visibility(false)
 	return true
+
+
+## 验证待结算周期仍满足雇佣和背包实物要求。[br]
+## 返回周期是否还能继续尝试结算。
+func _validate_pending_cycle() -> bool:
+	if cycle == null or not _validate_employer(cycle.employer):
+		return false
+	if not is_instance_valid(human):
+		return false
+	return human.carry.has_at_least(cycle.work_type.demand)
 
 
 ## 验证锁定周期仍满足雇佣、需求锁和产出预留要求。[br]

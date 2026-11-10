@@ -636,6 +636,8 @@ func can_accept_employee(human: Human) -> bool:
 		return false
 	if not is_instance_valid(human) or not human.is_inside_tree():
 		return false
+	if human.is_queued_for_deletion():
+		return false
 	if is_instance_valid(human.employer) and human.employer != self:
 		return false
 	if employees.has(human):
@@ -656,6 +658,8 @@ func get_recruitable_candidate_count() -> int:
 ## 返回该居民是否可以继续保留在本建筑雇员名单中。
 func is_employee_eligible(human: Human) -> bool:
 	if not is_instance_valid(human) or not human.is_inside_tree():
+		return false
+	if human.is_queued_for_deletion():
 		return false
 	if human.employer != self:
 		return false

@@ -138,8 +138,10 @@ func _bind_state_nodes(node: Node) -> void:
 		_bind_state_nodes(child)
 
 
-## 连接移动到达、路径失败和脱困完成信号，重复调用不会重复连接。
+## 连接移动开始、到达、路径失败和脱困完成信号，重复调用不会重复连接。
 func _connect_motion_signals() -> void:
+	if not motion.movement_started.is_connected(_on_movement_started):
+		motion.movement_started.connect(_on_movement_started)
 	if not motion.arrived.is_connected(_on_motion_arrived):
 		motion.arrived.connect(_on_motion_arrived)
 	if not motion.path_failed.is_connected(_on_motion_path_failed):
@@ -170,11 +172,18 @@ func on_tick() -> void:
 		motion.on_tick()
 
 
+## 开始移动时清除“已站在等待点”标记；到达等待点后再由到达处理重新置位。[br]
+## [param _destination] 是移动组件报告的目标格；成员位置由到达处理维护，因此本方法不直接使用它。
+func _on_movement_started(_destination: Vector2i) -> void:
+	_at_wait_place = false
+
+
 ## 响应移动到达：工作事务优先处理，等待目标到达后转入等待状态。[br]
 ## [param _destination] 是移动组件报告的到达格；路径状态由当前目标持有，因此本方法不直接使用它。
 func _on_motion_arrived(_destination: Vector2i) -> void:
 	if _active_state_key == &"working" and _work_behavior.is_busy():
-		_work_behavior.on_motion_arrived()
+		if not _work_behavior.on_motion_arrived():
+			send_event(EVENT_WORK_CANCELLED)
 		return
 	if _goal == Goal.WAIT:
 		_at_wait_place = true
@@ -324,8 +333,6 @@ func _set_goal(new_goal: int, new_target: Building) -> void:
 	var old_goal := _goal
 	_goal = new_goal
 	_target = new_target
-	if new_goal != Goal.WAIT:
-		_at_wait_place = false
 	if old_goal != new_goal:
 		goal_changed.emit(old_goal, new_goal)
 
@@ -510,6 +517,9 @@ func evaluate_work_interrupt() -> int:
 	# 锁定周期内口渴、饥饿和下班都不能打断；只有 Buff 工作闸门等硬中断生效。
 	if _work_behavior.is_locked():
 		return WorkInterrupt.NONE
+	# 取料与返岗阶段尚未锁定，紧急缺水或缺食时先回去补给，周期由调用方取消回滚。
+	if _is_water_urgent() or _is_food_urgent():
+		return WorkInterrupt.TRAVEL
 	return WorkInterrupt.NONE
 
 
