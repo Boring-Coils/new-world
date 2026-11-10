@@ -116,6 +116,7 @@ func _setup_buildings() -> void:
 	# 工作站和仓库保留为字段，供验收、统计和 UI 演示重复读取。
 	scrap_sorting_station = ScrapSortingStation.new()
 	scrap_sorting_station.name = scrap_sorting_station.display_name
+	scrap_sorting_station.target_workers = 3
 	add_child(scrap_sorting_station)
 	if not scrap_sorting_station.place_at(world, WORK_ORIGIN):
 		push_error("%s 放不下" % scrap_sorting_station.display_name)
