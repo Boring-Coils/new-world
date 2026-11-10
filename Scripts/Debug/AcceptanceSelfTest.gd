@@ -54,6 +54,8 @@ func _run() -> void:
 	await _test_schedule_and_waiting()
 	await _test_work_cycles()
 	await _test_carry()
+	await _test_demolish()
+	await _test_rotation()
 	await _test_inventory()
 	await _test_cleanup()
 	await _test_ui_contract()
@@ -1138,6 +1140,17 @@ func _test_carry() -> void:
 	var finished_cycle := behavior.cycle
 	behavior.on_motion_arrived()
 	var locked := behavior.get_phase_name() == &"locked"
+	var hidden_while_working := worker.in_building == station and not worker.visual.visible
+	_check(
+		"CARRY-11",
+		hidden_while_working,
+		"进入工作站后模型隐藏并登记站内占用",
+		"in_building=%s visible=%s occupants=%d" % [
+			worker.in_building,
+			worker.visual.visible,
+			station.get_occupant_count(),
+		],
+	)
 	behavior.tick()
 	_check(
 		"CARRY-02",
@@ -1343,6 +1356,207 @@ func _test_carry() -> void:
 		"before=%.2f after=%.2f" % [water_before_tick, worker.water],
 	)
 	await _dispose_tracked()
+
+
+## 验证摧毁建筑时的雇佣、工作周期与库存清算。
+func _test_demolish() -> void:
+	TickManager.total_ticks = 600
+	var origin := _next_origin()
+	var station := _create_workstation(origin, {}, {
+		MaterialTypes.ItemType.WIRE: 1,
+	}, 4, 1)
+	station.inventory.add_items_unchecked({MaterialTypes.ItemType.METAL: 3})
+	var warehouse := _create_test_warehouse(origin + Vector2i(0, 12), {})
+	var worker := _spawn_human(origin + Vector2i(2, 5), GlobalEnum.AgeStatus.ADULT, 30)
+	station.hire_employee(worker)
+	var behavior := worker.ai.get_work_behavior()
+	var cycle_started := behavior.begin(station)
+	var inside_building := worker.in_building == station
+	station.remove()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_check(
+		"DESTROY-01",
+		cycle_started
+		and inside_building
+		and not behavior.is_busy()
+		and worker.employer == null
+		and worker.in_building == null
+		and worker.visual.visible,
+		"摧毁建筑时取消工作周期并解雇工人",
+		"started=%s inside=%s busy=%s employer=%s in_building=%s visible=%s" % [
+			cycle_started,
+			inside_building,
+			behavior.is_busy(),
+			worker.employer,
+			worker.in_building,
+			worker.visual.visible,
+		],
+	)
+	_check(
+		"DESTROY-02",
+		warehouse.inventory.get_item_count(MaterialTypes.ItemType.METAL) == 3,
+		"摧毁建筑时自带库存转移到附近仓库",
+		"warehouse_metal=%d" % warehouse.inventory.get_item_count(MaterialTypes.ItemType.METAL),
+	)
+	await _dispose_tracked()
+
+	origin = _next_origin()
+	station = _create_workstation(origin, {}, {}, 1, 1)
+	station.inventory.add_items_unchecked({MaterialTypes.ItemType.METAL: 5})
+	warehouse = _create_test_warehouse(origin + Vector2i(0, 12), {})
+	warehouse.inventory.capacity = 2
+	station.remove()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_check(
+		"DESTROY-03",
+		warehouse.inventory.get_item_count(MaterialTypes.ItemType.METAL) == 2,
+		"仓库放不下时只转移能容纳的数量，其余销毁",
+		"warehouse_metal=%d" % warehouse.inventory.get_item_count(MaterialTypes.ItemType.METAL),
+	)
+	await _dispose_tracked()
+
+	origin = _next_origin()
+	station = _create_workstation(origin, {
+		MaterialTypes.ItemType.METAL: 1,
+	}, {
+		MaterialTypes.ItemType.WIRE: 1,
+	}, 2, 1)
+	warehouse = _create_test_warehouse(origin + Vector2i(20, 0), {
+		MaterialTypes.ItemType.METAL: 1,
+	})
+	worker = _spawn_human(origin + Vector2i(2, 5), GlobalEnum.AgeStatus.ADULT, 30)
+	station.hire_employee(worker)
+	behavior = worker.ai.get_work_behavior()
+	behavior.begin(station)
+	behavior.on_motion_arrived()
+	var carried_before_demolish := worker.carry.get_item_count(MaterialTypes.ItemType.METAL)
+	station.remove()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_check(
+		"DESTROY-04",
+		carried_before_demolish == 1 and warehouse.inventory.get_item_count(MaterialTypes.ItemType.METAL) == 1,
+		"摧毁建筑时在途物资退回来源仓库",
+		"carried=%d warehouse=%d" % [
+			carried_before_demolish,
+			warehouse.inventory.get_item_count(MaterialTypes.ItemType.METAL),
+		],
+	)
+	await _dispose_tracked()
+
+	# 详情页按钮到拆建筑之间的连线。
+	origin = _next_origin()
+	station = _create_workstation(origin, {}, {}, 1, 1)
+	var panel := BuildingDetailPanel.new()
+	panel.name = "验收详情页"
+	get_parent().add_child(panel)
+	await get_tree().process_frame
+	panel.show_building(station)
+	var demolish_button: Button = panel.get("_demolish_button")
+	var button_exists := demolish_button != null and demolish_button.get_signal_connection_list("pressed").size() == 1
+	demolish_button.pressed.emit()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_check(
+		"DESTROY-05",
+		button_exists and not is_instance_valid(station),
+		"详情页摧毁按钮接上拆除流程",
+		"button=%s connected=%s freed=%s" % [
+			demolish_button != null,
+			button_exists,
+			not is_instance_valid(station),
+		],
+	)
+	panel.queue_free()
+	await get_tree().process_frame
+	await _dispose_tracked()
+
+
+## 验证建筑旋转后的占格、出入口、放置校验与预览控制。
+func _test_rotation() -> void:
+	var station := ScrapSortingStation.new()
+	station.name = "旋转测试工作站"
+	var base_footprint := station.get_footprint()
+	station.set_rotation_steps(1)
+	var rotated_footprint := station.get_footprint()
+	var rotated_cells := station.get_occupied_cells()
+	station.free()
+	_check(
+		"ROTATE-01",
+		base_footprint == Vector2i(6, 4)
+		and rotated_footprint == Vector2i(4, 6)
+		and rotated_cells.size() == 24,
+		"旋转 90 度后占格宽高互换且数量不变",
+		"base=%s rotated=%s cells=%d" % [base_footprint, rotated_footprint, rotated_cells.size()],
+	)
+
+	var water := WaterStation.new()
+	water.name = "旋转测试取水站"
+	var entrance_before := water.get_entrance_cells()
+	water.set_rotation_steps(1)
+	var entrance_after := water.get_entrance_cells()
+	var entrance_footprint := Rect2i(Vector2i.ZERO, water.get_footprint())
+	var outside_body := true
+	for cell in entrance_after:
+		if entrance_footprint.has_point(cell):
+			outside_body = false
+	water.free()
+	_check(
+		"ROTATE-02",
+		entrance_before != entrance_after and outside_body and entrance_after.size() == 1,
+		"旋转后出入口随朝向移动且仍在本体外",
+		"before=%s after=%s" % [entrance_before, entrance_after],
+	)
+
+	var origin := _next_origin()
+	var placed := WaterStation.new()
+	placed.name = "旋转放置取水站"
+	placed.set_rotation_steps(1)
+	get_parent().add_child(placed)
+	_tracked_buildings.append(placed)
+	var placed_ok := placed.place_at(WorldGridGlobal.world, origin)
+	var body_blocked := true
+	for cell in placed.get_occupied_cells():
+		if WorldGridGlobal.world.is_walkable(cell):
+			body_blocked = false
+	var entrances_walkable := true
+	for cell in placed.get_entrance_cells():
+		if not WorldGridGlobal.world.is_walkable(cell):
+			entrances_walkable = false
+	_check(
+		"ROTATE-03",
+		placed_ok and placed.get_footprint() == Vector2i(3, 4) and body_blocked and entrances_walkable,
+		"旋转后的建筑按新占格占用网格，出入口保持可走",
+		"placed=%s footprint=%s body_blocked=%s entrances_walkable=%s" % [
+			placed_ok,
+			placed.get_footprint(),
+			body_blocked,
+			entrances_walkable,
+		],
+	)
+	await _dispose_tracked()
+
+	# 预览控制器按 R 旋转并把朝向带到落地的建筑上。
+	var controller := PlacementController.new()
+	controller.name = "验收放置控制器"
+	get_parent().add_child(controller)
+	await get_tree().process_frame
+	controller.select_kind(PlacementController.Kind.WAREHOUSE)
+	var ghost: Building = controller.get("_ghost")
+	var ghost_before := ghost.get_footprint()
+	controller.call("_rotate_ghost")
+	var ghost_after := ghost.get_footprint()
+	var origin_cell := controller.call("_origin_for", Vector2i(30, 30)) as Vector2i
+	_check(
+		"ROTATE-04",
+		ghost_before == Vector2i(3, 4) and ghost_after == Vector2i(4, 3) and origin_cell == Vector2i(28, 29),
+		"R 键旋转预览并按新占格重新居中",
+		"before=%s after=%s origin=%s" % [ghost_before, ghost_after, origin_cell],
+	)
+	controller.queue_free()
+	await get_tree().process_frame
 
 
 ## 验证库存容量、锁定、预留、补位、取消和所有者优先级。

@@ -101,6 +101,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 
+	if event is InputEventKey and event.pressed and event.keycode == KEY_R:
+		_rotate_ghost()
+		get_viewport().set_input_as_handled()
+		return
+
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			_try_place()
@@ -110,12 +115,22 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 
+## 把预览顺时针转 90 度并立即刷新落点与合法性。[br]
+## 只影响建筑预览；放置居民时按键无效果。
+func _rotate_ghost() -> void:
+	if _ghost == null or not is_instance_valid(_ghost):
+		return
+	_ghost.set_rotation_steps(_ghost.rotation_steps + 1)
+	_update_hover()
+
+
 ## 根据当前预览尺寸计算建筑左上角，使建筑尽量以 [param mouse_cell] 为中心。[br]
 ## 返回根据当前预览尺寸偏移后的建筑左上角格子。
 func _origin_for(mouse_cell: Vector2i) -> Vector2i:
 	if _ghost == null or not is_instance_valid(_ghost):
 		return mouse_cell
-	return mouse_cell - Vector2i(_ghost.size_cells.x / 2, _ghost.size_cells.y / 2)
+	var footprint := _ghost.get_footprint()
+	return mouse_cell - Vector2i(footprint.x / 2, footprint.y / 2)
 
 
 ## 刷新当前目标格、建筑预览位置和可放置状态。
@@ -161,6 +176,8 @@ func place_at_cell(mouse_cell: Vector2i) -> bool:
 		return false
 
 	var building := _create_building(kind)
+	# 新建筑沿用预览的朝向，进入场景树后按同一朝向生成外观。
+	building.set_rotation_steps(_ghost.rotation_steps)
 	if not building.place_at(world, origin):
 		building.free()
 		notice.emit("放置失败")

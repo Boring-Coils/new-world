@@ -30,3 +30,10 @@ func _on_step() -> void:
 	var result := _controller.tick_work_cycle()
 	if result == &"completed" or result == &"cancelled":
 		_send(HumanAI.EVENT_WORK_CANCELLED)
+
+
+## 离开工作状态时取消未结算的周期。[br]
+## 否则下班、换目标这类正常过渡会把锁和产出一并留在账本里，之后再也开不了新周期。
+func _on_exit() -> void:
+	if _controller.get_work_behavior().is_busy():
+		_controller.cancel_work_cycle("离开工作状态")

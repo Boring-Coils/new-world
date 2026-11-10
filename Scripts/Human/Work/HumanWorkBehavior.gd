@@ -360,7 +360,7 @@ func _settle() -> StringName:
 	if not cycle.employer.accept_work_result(result):
 		push_error("HumanWorkBehavior: 工作结果提交失败")
 	cycle.status = WorkCycle.Status.COMPLETED
-	_leave_host_building()
+	# 结算后保持站内隐藏，等人真的离开工作站（下班、补给或解雇）时再体现身。
 	phase = Phase.IDLE
 	cycle = null
 	_source_inventories.clear()
@@ -368,7 +368,9 @@ func _settle() -> StringName:
 	return &"completed"
 
 
-## 清理居民当前站内占用并恢复世界显示。
+## 离站时清理居民当前站内占用并恢复世界显示。[br]
+## 只在取消周期、离站或场景清理时调用；正常结算保持隐藏。
+
 func _leave_host_building() -> void:
 	if not is_instance_valid(human) or not is_instance_valid(human.in_building):
 		return

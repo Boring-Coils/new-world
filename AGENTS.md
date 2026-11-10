@@ -67,7 +67,7 @@ Scenes/
   TestScene.tscn           放置、模拟和 Buff 集成检查场景
   Human/Human.tscn         居民场景，挂 BuffSystem、Visual、Motion 和 HumanAI 状态图
 Scripts/
-  Core/                    刻调度和全局时间规则
+  Core/                    刻调度、物资账本和全局时间规则
   World/                   世界骨架、殖民地、相机和放置控制
   Grid/                    全局网格、寻路、格子坐标换算和网格显示
   Building/                建筑基类、取水站、取食站、工作站、仓库
@@ -90,10 +90,13 @@ build/                     本地导出目录，不提交
 
 ### 4.1 Autoload 与场景职责
 
-项目有两个 Autoload：
+项目有三个 Autoload：
 
 - `WorldGridGlobal`：全局唯一的 `WorldGrid`，在节点初始化时创建，供所有场景共享。
 - `TickManager`：游戏时钟、建筑和居民注册表、每刻更新入口。
+- `MaterialSystem`：场景级物资账本。库存登记、物品锁定、容量预留、周期结算和
+  所有者消失后的物资清算都必须经过这里；`World` 负责在场景进入和退出时调用
+  `start_scene()` / `begin_scene_shutdown()`。
 
 `World` 只负责所有世界场景都需要的基础设施，例如相机、网格显示和世界级建筑详情页。
 具体游戏规则、初始建筑和居民属于 `Colony` 或 `TestScene`，不要塞回 `World`。

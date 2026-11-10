@@ -8,6 +8,9 @@ class_name Building
 ## 建筑占多少格（横向 × 纵向）
 @export var size_cells: Vector2i = Vector2i(4, 3)
 
+## 建筑朝向，0 为初始方向，每加 1 顺时针转 90 度。
+var rotation_steps: int = 0
+
 ## 建筑类型
 @export var building_type: GlobalEnum.BuildingType = GlobalEnum.BuildingType.WATER
 
@@ -98,6 +101,9 @@ var last_work_result: Dictionary = {}
 ## 最近一次成功工作结果的累计接收次数。
 var work_result_count: int = 0
 
+# 落地投影，随朝向改变尺寸。
+var _shadow: ColorRect = null
+
 # 主体按钮，同时承担建筑外观与点击区域。
 var _body_button: Button = null
 
@@ -165,6 +171,39 @@ func leave(_human: Human) -> void:
 # 占地 / 出入口
 # ---------------------------------------------------------------------------
 
+## 返回当前朝向下建筑本体占用的宽高格数；旋转 90 度或 270 度时宽高互换。
+func get_footprint() -> Vector2i:
+	if rotation_steps % 2 == 0:
+		return size_cells
+	return Vector2i(size_cells.y, size_cells.x)
+
+
+## 把未旋转时的局部偏移换算到当前朝向的局部偏移。[br]
+## [param offset] 是初始朝向下的格子偏移。[br]
+## 返回当前朝向下对应的格子偏移。
+func _rotate_offset(offset: Vector2i) -> Vector2i:
+	match posmod(rotation_steps, 4):
+		1:
+			return Vector2i(size_cells.y - 1 - offset.y, offset.x)
+		2:
+			return Vector2i(size_cells.x - 1 - offset.x, size_cells.y - 1 - offset.y)
+		3:
+			return Vector2i(offset.y, size_cells.x - 1 - offset.x)
+		_:
+			return offset
+
+
+## 设置建筑朝向并刷新外观；只改表现和占格，不修改已放置状态。[br]
+## [param steps] 是朝向步数，按 4 取模。
+func set_rotation_steps(steps: int) -> void:
+	var normalized := posmod(steps, 4)
+	if normalized == rotation_steps:
+		return
+	rotation_steps = normalized
+	if is_inside_tree() and _body_button != null:
+		_update_visual_geometry()
+
+
 ## 建筑本体占的所有格子（绝对坐标）[br]
 ## 返回当前建筑本体覆盖的全部格子坐标。
 func get_occupied_cells() -> Array[Vector2i]:
@@ -176,8 +215,9 @@ func get_occupied_cells() -> Array[Vector2i]:
 ## 返回该左上角对应的全部占格坐标。
 func _get_occupied_cells_at(origin: Vector2i) -> Array[Vector2i]:
 	var cells: Array[Vector2i] = []
-	for x in range(origin.x, origin.x + size_cells.x):
-		for y in range(origin.y, origin.y + size_cells.y):
+	var footprint := get_footprint()
+	for x in range(origin.x, origin.x + footprint.x):
+		for y in range(origin.y, origin.y + footprint.y):
 			cells.append(Vector2i(x, y))
 	return cells
 
@@ -200,7 +240,7 @@ func _overlaps_existing_entrance(footprint: Dictionary) -> bool:
 func get_entrance_cells() -> Array[Vector2i]:
 	var cells: Array[Vector2i] = []
 	for offset in entrance_offsets:
-		cells.append(origin_cell + offset)
+		cells.append(origin_cell + _rotate_offset(offset))
 	return cells
 
 
@@ -247,31 +287,32 @@ func is_entrance_cell(cell: Vector2i) -> bool:
 ## 本体不覆盖已有建筑的出入口，且每个自己的出入口在界内、是空地并与建筑边相邻。[br]
 ## 返回该位置是否允许放置当前建筑。
 func can_place_at(world: WorldGrid, origin: Vector2i) -> bool:
-	if size_cells.x <= 0 or size_cells.y <= 0:
+	var footprint := get_footprint()
+	if footprint.x <= 0 or footprint.y <= 0:
 		return false
 
 	# 1. 整个矩形必须在世界范围内
 	if origin.x < 0 or origin.y < 0:
 		return false
 	var world_cells := world.get_cells()
-	if origin.x + size_cells.x > world_cells.x or origin.y + size_cells.y > world_cells.y:
+	if origin.x + footprint.x > world_cells.x or origin.y + footprint.y > world_cells.y:
 		return false
 
 	# 2. 本体内每一格都必须是空地，且不能覆盖已有建筑的出入口
 	var candidate_cells := _get_occupied_cells_at(origin)
-	var footprint: Dictionary = {}
+	var footprint_lookup: Dictionary = {}
 	for cell in candidate_cells:
 		if not world.is_walkable(cell):
 			return false
-		footprint[cell] = true
+		footprint_lookup[cell] = true
 
-	if _overlaps_existing_entrance(footprint):
+	if _overlaps_existing_entrance(footprint_lookup):
 		return false
 
 	# 3. 出入口：界内、在矩形外、和矩形边相邻、本身是空地
-	var rect := Rect2i(origin, size_cells)
+	var rect := Rect2i(origin, footprint)
 	for offset in entrance_offsets:
-		var cell := origin + offset
+		var cell := origin + _rotate_offset(offset)
 		if not world.is_in_bounds(cell):
 			return false
 		if rect.has_point(cell):
@@ -325,16 +366,16 @@ func set_cell_origin(cell: Vector2i) -> void:
 ## hover/pressed 状态和以后换贴图也都不用自己算。
 func _build_visuals() -> void:
 	var cell := float(WorldGrid.CELL_SIZE)
-	var size_px := Vector2(size_cells) * cell
+	var size_px := Vector2(get_footprint()) * cell
 
 	# 投影：稍微往右下错一点，看起来像浮在地上
-	var shadow := ColorRect.new()
-	shadow.name = "Shadow"
-	shadow.color = Color(0.0, 0.0, 0.0, 0.15)
-	shadow.position = Vector2(1.4, 2.0)
-	shadow.size = size_px
-	shadow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(shadow)
+	_shadow = ColorRect.new()
+	_shadow.name = "Shadow"
+	_shadow.color = Color(0.0, 0.0, 0.0, 0.15)
+	_shadow.position = Vector2(1.4, 2.0)
+	_shadow.size = size_px
+	_shadow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_shadow)
 
 	# 主体：一个铺满整块地的按钮
 	var body := Button.new()
@@ -378,13 +419,37 @@ func _build_visuals() -> void:
 	for offset in entrance_offsets:
 		var mark := ColorRect.new()
 		mark.color = Color(1.0, 0.85, 0.30, 0.75)
-		mark.position = Vector2(offset) * cell
+		mark.position = Vector2(_rotate_offset(offset)) * cell
 		mark.size = Vector2(cell, cell)
 		mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(mark)
 		_entrance_marks.append(mark)
 
 	_apply_preview_style()
+
+
+## 按当前朝向重排外观节点；旋转时宽高互换，图标与出入口跟着换位置。
+func _update_visual_geometry() -> void:
+	var cell := float(WorldGrid.CELL_SIZE)
+	var size_px := Vector2(get_footprint()) * cell
+
+	if _shadow != null:
+		_shadow.size = size_px
+	if _body_button != null:
+		_body_button.size = size_px
+	if _cornice != null:
+		_cornice.size = Vector2(size_px.x, size_px.y * 0.18)
+	if _glyph != null:
+		var symbol_size := minf(size_px.x, size_px.y) * 0.34
+		_glyph.size = Vector2(symbol_size, symbol_size)
+		_glyph.position = Vector2(
+			size_px.x * 0.5 - symbol_size * 0.5,
+			size_px.y * 0.6 - symbol_size * 0.5,
+		)
+	for index in range(_entrance_marks.size()):
+		var offset := _rotate_offset(entrance_offsets[index])
+		_entrance_marks[index].position = Vector2(offset) * cell
+		_entrance_marks[index].size = Vector2(cell, cell)
 
 
 ## 生成一份主体样式：纯色底 + 深色描边[br]

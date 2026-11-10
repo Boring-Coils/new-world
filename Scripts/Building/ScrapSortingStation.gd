@@ -20,7 +20,7 @@ func _init() -> void:
 	display_name = "废料分拣站"
 	is_hireable = true
 	max_workers = 3
-	target_workers = 3
+	target_workers = 0
 	inventory_capacity = 1000
 	work_type = WorkType.create_scrap_sorting()
 
