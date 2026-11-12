@@ -155,6 +155,12 @@ func get_wait_ticks() -> int:
 	return 0
 
 
+## 返回建筑提供的无限物资类型，供玩家状态栏汇总。[br]
+## 基类没有无限能力，返回 -1；无限材料站覆盖此接口。
+func get_infinite_item_type() -> int:
+	return -1
+
+
 ## 尝试让居民进入工作建筑内部。返回是否实际进入并占用站内位置。[br]
 ## [param _human] 是请求进入建筑的居民；基类不维护站内名单，因此忽略该参数。
 func enter(_human: Human) -> bool:
@@ -542,10 +548,11 @@ func build_detail() -> void:
 
 	if inventory != null:
 		# 库存总览始终显示，非零物品再展开到明细板块。
-		add_section("inventoryTotal", "库存总览")
-		add_row("inventoryTotal", "容量", "%d" % inventory.capacity)
-		add_row("inventoryTotal", "已用体积", "%d" % inventory.get_used_volume())
-		add_row("inventoryTotal", "已预留体积", "%d" % inventory.reserved_volume)
+		add_section("inventory", "库存总览")
+		add_row("inventory", "容量", "%d" % inventory.capacity)
+		add_row("inventory", "已用体积", "%d" % inventory.get_used_volume())
+		add_row("inventory", "已预留体积", "%d" % inventory.reserved_volume)
+		add_row("inventory", "可用体积", "%d" % inventory.get_available_volume())
 
 		add_section("inventoryDetail", "库存详情")
 		for item_type in MaterialTypes.get_item_types():

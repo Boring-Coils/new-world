@@ -221,6 +221,18 @@ func _setup_ui() -> void:
 
 ## 打开参数指定的建筑详情页，并把建筑预览固定到截图位置。
 func _open_ui_demo() -> void:
+	if _ui_demo == "status-wire":
+		# 等待状态栏完成延迟布局后再模拟悬停，便于截图检查统一详情面板。
+		await get_tree().process_frame
+		await get_tree().process_frame
+		var status_bar := get_node_or_null("PlayerStatusBar") as PlayerStatusBar
+		if status_bar != null:
+			var wire := status_bar.get_item_control(
+				"material:%d" % MaterialTypes.ItemType.WIRE
+			)
+			if wire != null:
+				wire.mouse_entered.emit()
+		return
 	var panel := get_node_or_null("BuildingDetailPanel") as BuildingDetailPanel
 	if panel == null:
 		return

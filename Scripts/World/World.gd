@@ -14,6 +14,7 @@ func _ready() -> void:
 	MaterialSystem.start_scene()
 	_setup_camera()
 	_setup_grid()
+	_setup_status_bar()
 	_setup_detail_panel()
 
 
@@ -27,6 +28,13 @@ func _setup_detail_panel() -> void:
 	var panel := BuildingDetailPanel.new()
 	panel.name = "BuildingDetailPanel"
 	add_child(panel)
+
+
+## 顶部正式玩家状态栏；Colony 与 TestScene 共享同一条统计显示。
+func _setup_status_bar() -> void:
+	var status_bar := PlayerStatusBar.new()
+	status_bar.name = "PlayerStatusBar"
+	add_child(status_bar)
 
 
 ## 创建并挂载独立的相机控制节点。

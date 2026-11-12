@@ -58,6 +58,7 @@ func _run() -> void:
 	await _test_rotation()
 	await _test_inventory()
 	await _test_cleanup()
+	await _test_status_display()
 	await _test_ui_contract()
 	await _dispose_tracked()
 
@@ -2231,6 +2232,341 @@ func _test_cleanup() -> void:
 	)
 	await _dispose_tracked()
 	_clear_virtual_owners()
+
+## 验证正式玩家状态栏的注册、统计口径、无限来源、悬停详情和布局。
+func _test_status_display() -> void:
+	var status_bar := get_parent().get_node_or_null("PlayerStatusBar") as PlayerStatusBar
+	_check(
+		"STAT-01",
+		status_bar != null,
+		"World 挂载正式 PlayerStatusBar",
+		"status_bar=%s" % status_bar,
+	)
+	if status_bar == null:
+		return
+	await get_tree().process_frame
+
+	var initial_snapshot := status_bar.get_debug_snapshot()
+	var expected_material_ids: Array[String] = []
+	for item_type in MaterialTypes.STATUS_ITEM_ORDER:
+		expected_material_ids.append("material:%d" % item_type)
+	var registered_ids: Array[String] = initial_snapshot["item_ids"]
+	var material_order_ok := true
+	for index in range(expected_material_ids.size()):
+		if registered_ids[index] != expected_material_ids[index]:
+			material_order_ok = false
+			break
+	_check(
+		"STAT-02",
+		MaterialSystem.get_status_registration_count() == 6
+		and material_order_ok
+		and registered_ids[-2] == "population"
+		and registered_ids[-1] == "time",
+		"六种物资按水/食物/废料/塑料/金属/线注册一次，后接人口和时间",
+		"count=%d ids=%s" % [
+			MaterialSystem.get_status_registration_count(),
+			registered_ids,
+		],
+	)
+
+	var white_icons_ok := true
+	for item_id in expected_material_ids:
+		var item := status_bar.get_item_control(item_id)
+		if (
+			item == null
+			or item.get_icon_texture() == null
+			or not item.has_white_icon()
+		):
+			white_icons_ok = false
+			break
+	_check(
+		"STAT-03",
+		white_icons_ok,
+		"六种物资都有白色图标",
+		"icons_ok=%s" % white_icons_ok,
+	)
+
+	var origin := _next_origin()
+	var stats_warehouse := _create_test_warehouse(origin, {
+		MaterialTypes.ItemType.WATER: 7,
+		MaterialTypes.ItemType.FOOD: 5,
+		MaterialTypes.ItemType.WASTE: 4,
+		MaterialTypes.ItemType.PLASTIC: 3,
+		MaterialTypes.ItemType.METAL: 2,
+		MaterialTypes.ItemType.WIRE: 1,
+	})
+	var child_human := _spawn_human(
+		origin + Vector2i(1, 5),
+		GlobalEnum.AgeStatus.CHILD,
+		10,
+	)
+	var adult_human := _spawn_human(
+		origin + Vector2i(2, 5),
+		GlobalEnum.AgeStatus.ADULT,
+		30,
+	)
+	_spawn_human(
+		origin + Vector2i(3, 5),
+		GlobalEnum.AgeStatus.OLD,
+		70,
+	)
+	await get_tree().process_frame
+
+	var summaries: Dictionary = status_bar.get_item_summaries()
+	var expected_summaries := {
+		"material:%d" % MaterialTypes.ItemType.WATER: "无限",
+		"material:%d" % MaterialTypes.ItemType.FOOD: "无限",
+		"material:%d" % MaterialTypes.ItemType.WASTE: "4",
+		"material:%d" % MaterialTypes.ItemType.PLASTIC: "3",
+		"material:%d" % MaterialTypes.ItemType.METAL: "2",
+		"material:%d" % MaterialTypes.ItemType.WIRE: "1",
+	}
+	var summaries_ok := true
+	for item_id in expected_summaries:
+		if String(summaries.get(item_id, "")) != String(expected_summaries[item_id]):
+			summaries_ok = false
+			break
+	_check(
+		"STAT-04",
+		summaries_ok,
+		"只汇总仓库，工作站自带库存不进入第一行",
+		"summaries=%s" % summaries,
+	)
+
+	var wire_id := "material:%d" % MaterialTypes.ItemType.WIRE
+	var wire_lock := MaterialSystem.lock_items(
+		stats_warehouse.inventory,
+		MaterialTypes.ItemType.WIRE,
+		1,
+		"stats:lock",
+		origin,
+	)
+	var locked_summary := String(status_bar.get_item_summaries().get(wire_id, ""))
+	var taken_to_bag := MaterialSystem.take_locked(wire_lock, child_human.carry)
+	var carried_summary := String(status_bar.get_item_summaries().get(wire_id, ""))
+	var bag_excluded := (
+		taken_to_bag
+		and child_human.carry.get_item_count(MaterialTypes.ItemType.WIRE) == 1
+		and carried_summary == "0"
+	)
+	child_human.carry.remove_items(MaterialTypes.ItemType.WIRE, 1)
+	stats_warehouse.inventory.add_items_unchecked({
+		MaterialTypes.ItemType.WIRE: 1,
+	})
+	_check(
+		"STAT-05",
+		locked_summary == "1" and bag_excluded,
+		"仓库锁定仍计入，取出到居民背包后从第一行排除",
+		"locked=%s carried=%s bag=%d" % [
+			locked_summary,
+			carried_summary,
+			child_human.carry.get_item_count(MaterialTypes.ItemType.WIRE),
+		],
+	)
+
+	var water_station: Building = null
+	var food_station: Building = null
+	for building in TickManager.get_buildings_of_type(GlobalEnum.BuildingType.WATER):
+		water_station = building
+		break
+	for building in TickManager.get_buildings_of_type(GlobalEnum.BuildingType.FOOD):
+		food_station = building
+		break
+	var infinite_types_ok := (
+		water_station != null
+		and food_station != null
+		and water_station.get_infinite_item_type() == MaterialTypes.ItemType.WATER
+		and food_station.get_infinite_item_type() == MaterialTypes.ItemType.FOOD
+	)
+	var infinite_overrides_warehouse := (
+		MaterialSystem.get_warehouse_item_total(MaterialTypes.ItemType.WATER) == 7
+		and String(status_bar.get_item_summaries().get(
+			"material:%d" % MaterialTypes.ItemType.WATER,
+			"",
+		)) == "无限"
+	)
+	_check(
+		"STAT-06",
+		infinite_types_ok and infinite_overrides_warehouse,
+		"水/食物无限来源覆盖同类仓库有限储量",
+		"types_ok=%s finite_water=%d summary=%s" % [
+			infinite_types_ok,
+			MaterialSystem.get_warehouse_item_total(MaterialTypes.ItemType.WATER),
+			status_bar.get_item_summaries().get(
+				"material:%d" % MaterialTypes.ItemType.WATER,
+				"",
+			),
+		],
+	)
+
+	TickManager.unregister_building(water_station)
+	var finite_after_removal := String(status_bar.get_item_summaries().get(
+		"material:%d" % MaterialTypes.ItemType.WATER,
+		"",
+	))
+	TickManager.register_building(water_station)
+	var infinite_after_restore := String(status_bar.get_item_summaries().get(
+		"material:%d" % MaterialTypes.ItemType.WATER,
+		"",
+	))
+	_check(
+		"STAT-07",
+		finite_after_removal == "7" and infinite_after_restore == "无限",
+		"无限材料站移除后恢复仓库汇总，重新登记后恢复无限",
+		"removed=%s restored=%s" % [finite_after_removal, infinite_after_restore],
+	)
+
+	var population_summary := String(
+		status_bar.get_item_summaries().get("population", "")
+	)
+	adult_human.age_status = GlobalEnum.AgeStatus.OLD
+	var aged_population_summary := String(
+		status_bar.get_item_summaries().get("population", "")
+	)
+	_check(
+		"STAT-08",
+		population_summary == "儿童 1  成人 1  老人 1"
+		and aged_population_summary == "儿童 1  成人 0  老人 2",
+		"人口按 age_status 统计并响应年龄阶段变化",
+		"before=%s after=%s" % [
+			population_summary,
+			aged_population_summary,
+		],
+	)
+
+	var first_day_text := PlayerStatusBar.format_game_time(0, 0)
+	var original_tick := TickManager.total_ticks
+	TickManager.total_ticks = TickManager.TICKS_PER_DAY + 41
+	TickManager.advance_tick()
+	await get_tree().process_frame
+	var second_day_text := String(status_bar.get_item_summaries().get("time", ""))
+	_check(
+		"STAT-09",
+		first_day_text == "0001天0000刻" and second_day_text == "0002天0042刻",
+		"时间显示从第一天第零刻开始并使用四位补零",
+		"first=%s second=%s" % [first_day_text, second_day_text],
+	)
+
+	var wire_item := status_bar.get_item_control(wire_id)
+	var fetch_before := int(status_bar.get_debug_snapshot()["detail_fetch_count"])
+	wire_item.mouse_entered.emit()
+	var opened_snapshot := status_bar.get_debug_snapshot()
+	var opened_ok := (
+		bool(opened_snapshot["detail_open"])
+		and int(opened_snapshot["detail_fetch_count"]) == fetch_before + 1
+		and String(opened_snapshot["detail_text"]).contains("仓库储量=1")
+	)
+	var detail_lock := MaterialSystem.lock_items(
+		stats_warehouse.inventory,
+		MaterialTypes.ItemType.WIRE,
+		1,
+		"stats:detail",
+		origin,
+	)
+	var locked_detail_ok := (
+		String(status_bar.get_debug_snapshot()["detail_text"]).contains("其中锁定=1")
+	)
+	MaterialSystem.release_lock(detail_lock)
+	var unlocked_detail_ok := (
+		String(status_bar.get_debug_snapshot()["detail_text"]).contains("其中锁定=0")
+	)
+	stats_warehouse.inventory.add_items_unchecked({
+		MaterialTypes.ItemType.WIRE: 2,
+	})
+	var updated_snapshot := status_bar.get_debug_snapshot()
+	var live_update_ok := (
+		locked_detail_ok
+		and unlocked_detail_ok
+		and String(updated_snapshot["detail_text"]).contains("仓库储量=3")
+		and int(updated_snapshot["detail_fetch_count"]) == fetch_before + 4
+	)
+	wire_item.mouse_exited.emit()
+	var closed_snapshot := status_bar.get_debug_snapshot()
+	var fetch_when_closed := int(closed_snapshot["detail_fetch_count"])
+	TickManager.advance_tick()
+	stats_warehouse.inventory.remove_items_unchecked(
+		MaterialTypes.ItemType.WIRE,
+		1,
+	)
+	var closed_after_changes := status_bar.get_debug_snapshot()
+	_check(
+		"STAT-10",
+		opened_ok
+		and live_update_ok
+		and not bool(closed_snapshot["detail_open"])
+		and int(closed_after_changes["detail_fetch_count"]) == fetch_when_closed,
+		"详情悬停时实时刷新，关闭后不再生成详情",
+		"opened=%s live=%s closed_open=%s fetches=%d" % [
+			opened_ok,
+			live_update_ok,
+			closed_snapshot["detail_open"],
+			int(closed_after_changes["detail_fetch_count"]) - fetch_when_closed,
+		],
+	)
+
+	var empty_summary := func() -> String: return "测试项"
+	var empty_detail := func() -> Array[Dictionary]: return []
+	var width_before := (status_bar.get_debug_snapshot()["bar_size"] as Vector2).x
+	var custom_item := status_bar.register_info_item({
+		"id": "test:no_detail",
+		"row": 1,
+		"order": 99,
+		"title": "测试项",
+		"icon": PlayerStatusBar.POPULATION_ICON,
+		"show_title": false,
+		"summary_provider": empty_summary,
+		"detail_provider": empty_detail,
+		"refresh_channels": [],
+	})
+	await get_tree().process_frame
+	var width_after := (status_bar.get_debug_snapshot()["bar_size"] as Vector2).x
+	var custom_created := (
+		custom_item != null
+		and status_bar.get_item_control("test:no_detail") == custom_item
+	)
+	custom_item.mouse_entered.emit()
+	var custom_has_no_detail := not status_bar.is_detail_open()
+	custom_item.mouse_exited.emit()
+	var custom_removed := status_bar.unregister_info_item("test:no_detail")
+	await get_tree().process_frame
+	_check(
+		"STAT-11",
+		custom_created
+		and width_after > width_before
+		and custom_has_no_detail
+		and custom_removed,
+		"信息项动态改变栏宽，详情提供者可自行返回空内容",
+		"width=%.1f->%.1f no_detail=%s removed=%s" % [
+			width_before,
+			width_after,
+			custom_has_no_detail,
+			custom_removed,
+		],
+	)
+
+	var layout_snapshot := status_bar.get_debug_snapshot()
+	var viewport_size := get_viewport().get_visible_rect().size
+	var bar_position: Vector2 = layout_snapshot["bar_position"]
+	var bar_size: Vector2 = layout_snapshot["bar_size"]
+	var centered := absf(bar_position.x + bar_size.x * 0.5 - viewport_size.x * 0.5) <= 2.0
+	_check(
+		"STAT-12",
+		centered
+		and bar_position.y >= 0.0
+		and bool(layout_snapshot["bar_accepts_mouse"])
+		and bool(layout_snapshot["item_accepts_mouse"]),
+		"状态栏顶部居中且根控件与信息项拦截鼠标",
+		"position=%s size=%s centered=%s bar_mouse=%s item_mouse=%s" % [
+			bar_position,
+			bar_size,
+			centered,
+			layout_snapshot["bar_accepts_mouse"],
+			layout_snapshot["item_accepts_mouse"],
+		],
+	)
+
+	TickManager.total_ticks = original_tick
+	await _dispose_tracked()
 
 
 ## 验证建筑详情数据、可编辑数字输入、刷新焦点稳定和布局边界。
