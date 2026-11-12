@@ -2423,14 +2423,34 @@ func _test_status_display() -> void:
 	var aged_population_summary := String(
 		status_bar.get_item_summaries().get("population", "")
 	)
+	var population_station := _create_workstation(_next_origin(), {}, {}, 1, 1)
+	population_station.allow_old_workers = true
+	population_station.hire_employee(adult_human)
+	var unemployed_counts := status_bar.get_unemployed_population_counts()
+	var population_detail := status_bar.get_population_detail()
+	var no_work_labels_ok := false
+	if not population_detail.is_empty():
+		var rows: Array = population_detail[0].get("rows", [])
+		no_work_labels_ok = (
+			rows.size() == 3
+			and String(rows[0].get("label", "")) == "儿童无工作"
+			and String(rows[1].get("label", "")) == "成人无工作"
+			and String(rows[2].get("label", "")) == "老人无工作"
+		)
 	_check(
 		"STAT-08",
 		population_summary == "儿童 1  成人 1  老人 1"
-		and aged_population_summary == "儿童 1  成人 0  老人 2",
-		"人口按 age_status 统计并响应年龄阶段变化",
-		"before=%s after=%s" % [
+		and aged_population_summary == "儿童 1  成人 0  老人 2"
+		and int(unemployed_counts[GlobalEnum.AgeStatus.CHILD]) == 1
+		and int(unemployed_counts[GlobalEnum.AgeStatus.ADULT]) == 0
+		and int(unemployed_counts[GlobalEnum.AgeStatus.OLD]) == 1
+		and no_work_labels_ok,
+		"人口按 age_status 统计，详情按年龄段显示无工作人数",
+		"before=%s after=%s unemployed=%s labels=%s" % [
 			population_summary,
 			aged_population_summary,
+			unemployed_counts,
+			no_work_labels_ok,
 		],
 	)
 
@@ -2440,11 +2460,21 @@ func _test_status_display() -> void:
 	TickManager.advance_tick()
 	await get_tree().process_frame
 	var second_day_text := String(status_bar.get_item_summaries().get("time", ""))
+	var time_item := status_bar.get_item_control("time")
+	time_item.mouse_entered.emit()
+	var time_has_no_detail := not status_bar.is_detail_open()
+	time_item.mouse_exited.emit()
 	_check(
 		"STAT-09",
-		first_day_text == "0001天0000刻" and second_day_text == "0002天0042刻",
-		"时间显示从第一天第零刻开始并使用四位补零",
-		"first=%s second=%s" % [first_day_text, second_day_text],
+		first_day_text == "0001天0000刻"
+		and second_day_text == "0002天0042刻"
+		and time_has_no_detail,
+		"时间按四位补零显示且不提供悬停详情",
+		"first=%s second=%s hover_detail=%s" % [
+			first_day_text,
+			second_day_text,
+			not time_has_no_detail,
+		],
 	)
 
 	var wire_item := status_bar.get_item_control(wire_id)
@@ -2454,7 +2484,7 @@ func _test_status_display() -> void:
 	var opened_ok := (
 		bool(opened_snapshot["detail_open"])
 		and int(opened_snapshot["detail_fetch_count"]) == fetch_before + 1
-		and String(opened_snapshot["detail_text"]).contains("仓库储量=1")
+		and String(opened_snapshot["detail_text"]).contains("总数=1")
 	)
 	var detail_lock := MaterialSystem.lock_items(
 		stats_warehouse.inventory,
@@ -2464,11 +2494,11 @@ func _test_status_display() -> void:
 		origin,
 	)
 	var locked_detail_ok := (
-		String(status_bar.get_debug_snapshot()["detail_text"]).contains("其中锁定=1")
+		String(status_bar.get_debug_snapshot()["detail_text"]).contains("已锁定=1")
 	)
 	MaterialSystem.release_lock(detail_lock)
 	var unlocked_detail_ok := (
-		String(status_bar.get_debug_snapshot()["detail_text"]).contains("其中锁定=0")
+		String(status_bar.get_debug_snapshot()["detail_text"]).contains("已锁定=0")
 	)
 	stats_warehouse.inventory.add_items_unchecked({
 		MaterialTypes.ItemType.WIRE: 2,
@@ -2477,7 +2507,7 @@ func _test_status_display() -> void:
 	var live_update_ok := (
 		locked_detail_ok
 		and unlocked_detail_ok
-		and String(updated_snapshot["detail_text"]).contains("仓库储量=3")
+		and String(updated_snapshot["detail_text"]).contains("总数=3")
 		and int(updated_snapshot["detail_fetch_count"]) == fetch_before + 4
 	)
 	wire_item.mouse_exited.emit()
@@ -2552,14 +2582,18 @@ func _test_status_display() -> void:
 	_check(
 		"STAT-12",
 		centered
-		and bar_position.y >= 0.0
+		and is_zero_approx(bar_position.y)
+		and float(layout_snapshot["surface_fill_alpha"]) <= 0.55
+		and float(layout_snapshot["text_alpha"]) < 0.85
 		and bool(layout_snapshot["bar_accepts_mouse"])
 		and bool(layout_snapshot["item_accepts_mouse"]),
-		"状态栏顶部居中且根控件与信息项拦截鼠标",
-		"position=%s size=%s centered=%s bar_mouse=%s item_mouse=%s" % [
+		"状态栏紧贴顶部、透明度约 0.5 且根控件与信息项拦截鼠标",
+		"position=%s size=%s centered=%s fill_alpha=%.2f text_alpha=%.2f bar_mouse=%s item_mouse=%s" % [
 			bar_position,
 			bar_size,
 			centered,
+			float(layout_snapshot["surface_fill_alpha"]),
+			float(layout_snapshot["text_alpha"]),
 			layout_snapshot["bar_accepts_mouse"],
 			layout_snapshot["item_accepts_mouse"],
 		],

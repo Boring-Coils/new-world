@@ -1,11 +1,11 @@
 ## 正式玩家状态栏。[br]
-## 顶部常驻显示物资与人口/时间摘要，并为每个信息项提供统一的悬停详情面板。[br]
+## 顶部常驻显示物资与人口/时间摘要，并为允许详情的项目提供统一悬停面板。[br]
 ## 摘要只响应库存、居民、建筑和时间事件，详情只在展开期间按相关事件刷新。
 extends CanvasLayer
 class_name PlayerStatusBar
 
 ## 状态栏与视口顶部的距离。
-const TOP_MARGIN: float = 12.0
+const TOP_MARGIN: float = 0.0
 
 ## 无内容时状态栏仍保留的最小宽度。
 const MIN_BAR_WIDTH: float = 220.0
@@ -106,7 +106,7 @@ func register_info_item(definition: Dictionary) -> PlayerStatusInfoItem:
 	if row_index == 0 and _rows[row_index].get_child_count() > 0:
 		var separator := ColorRect.new()
 		separator.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		separator.color = Color(0.86, 0.89, 0.94, 0.62)
+		separator.color = Color(0.86, 0.89, 0.94, 0.36)
 		separator.custom_minimum_size = Vector2(1.0, 18.0)
 		separator.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		_rows[row_index].add_child(separator)
@@ -167,6 +167,8 @@ func get_debug_snapshot() -> Dictionary:
 		"bar_size": _surface.size,
 		"bar_accepts_mouse": _surface.mouse_filter == Control.MOUSE_FILTER_STOP,
 		"item_accepts_mouse": item_accepts_mouse,
+		"surface_fill_alpha": StatusBarSurface.FILL_COLOR.a,
+		"text_alpha": (_items.values()[0] as PlayerStatusInfoItem).get_text_alpha(),
 		"detail_open": is_detail_open(),
 		"detail_fetch_count": _detail_fetch_count,
 		"detail_text": _get_detail_plain_text(),
@@ -205,6 +207,27 @@ func get_population_counts() -> Dictionary:
 	return counts
 
 
+## 按年龄阶段统计当前没有有效雇主的居民人数。[br]
+## “无工作”以是否拥有有效雇主为准，不随当刻是否在班或是否正在动作变化。
+func get_unemployed_population_counts() -> Dictionary:
+	var counts := {
+		GlobalEnum.AgeStatus.CHILD: 0,
+		GlobalEnum.AgeStatus.ADULT: 0,
+		GlobalEnum.AgeStatus.OLD: 0,
+	}
+	for human in TickManager.humans:
+		if (
+			not is_instance_valid(human)
+			or not human.is_inside_tree()
+			or human.is_queued_for_deletion()
+			or human.has_employer()
+		):
+			continue
+		if counts.has(human.age_status):
+			counts[human.age_status] = int(counts[human.age_status]) + 1
+	return counts
+
+
 ## 返回人口摘要文本。
 func get_population_summary() -> String:
 	var counts := get_population_counts()
@@ -217,41 +240,18 @@ func get_population_summary() -> String:
 
 ## 返回人口悬停详情。
 func get_population_detail() -> Array[Dictionary]:
-	var counts := get_population_counts()
+	var counts := get_unemployed_population_counts()
 	var rows: Array[Dictionary] = [
-		{"label": "儿童", "value": str(int(counts[GlobalEnum.AgeStatus.CHILD]))},
-		{"label": "成人", "value": str(int(counts[GlobalEnum.AgeStatus.ADULT]))},
-		{"label": "老人", "value": str(int(counts[GlobalEnum.AgeStatus.OLD]))},
-		{
-			"label": "总计",
-			"value": str(
-				int(counts[GlobalEnum.AgeStatus.CHILD])
-				+ int(counts[GlobalEnum.AgeStatus.ADULT])
-				+ int(counts[GlobalEnum.AgeStatus.OLD])
-			),
-		},
+		{"label": "儿童无工作", "value": str(int(counts[GlobalEnum.AgeStatus.CHILD]))},
+		{"label": "成人无工作", "value": str(int(counts[GlobalEnum.AgeStatus.ADULT]))},
+		{"label": "老人无工作", "value": str(int(counts[GlobalEnum.AgeStatus.OLD]))},
 	]
-	return [{"title": "人口统计", "rows": rows}]
+	return [{"title": "无工作人口", "rows": rows}]
 
 
 ## 返回当前时间摘要。
 func get_time_summary() -> String:
 	return format_game_time(TickManager.get_day(), TickManager.get_tick_of_day())
-
-
-## 返回逐刻变化的时间悬停详情。
-func get_time_detail() -> Array[Dictionary]:
-	var day := TickManager.get_day()
-	var tick_of_day := TickManager.get_tick_of_day()
-	return [{
-		"title": "游戏时间",
-		"rows": [
-			{"label": "当前时间", "value": format_game_time(day, tick_of_day)},
-			{"label": "游戏日", "value": str(day + 1)},
-			{"label": "日内刻", "value": str(tick_of_day)},
-			{"label": "累计刻", "value": str(TickManager.total_ticks)},
-		],
-	}]
 
 
 ## 创建倒置梯形底板、两行内容容器和统一详情面板。
@@ -344,7 +344,8 @@ func _register_status_items() -> void:
 		"icon": TIME_ICON,
 		"show_title": false,
 		"summary_provider": Callable(self, "get_time_summary"),
-		"detail_provider": Callable(self, "get_time_detail"),
+		# 时间只保留摘要，不参与悬停详情。
+		"detail_provider": Callable(),
 		"refresh_channels": [&"time"],
 	})
 

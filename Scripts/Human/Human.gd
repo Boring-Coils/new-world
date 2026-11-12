@@ -100,6 +100,8 @@ func _exit_tree() -> void:
 ## 建立与 [param building] 的雇佣关系；调用方负责同步建筑的雇员名单。
 func bind_employer(building: Building) -> void:
 	employer = building
+	if is_inside_tree():
+		TickManager.notify_human_changed(self)
 
 
 ## 接收雇佣结束通知，清理雇主引用并让 AI 取消相关工作状态。[br]
@@ -108,6 +110,8 @@ func bind_employer(building: Building) -> void:
 func notify_employment_ended(building: Building, reason: String) -> void:
 	if employer == building:
 		employer = null
+		if is_inside_tree():
+			TickManager.notify_human_changed(self)
 	if is_instance_valid(ai):
 		ai.on_employment_ended(building, reason)
 

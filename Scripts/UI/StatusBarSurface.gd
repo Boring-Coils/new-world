@@ -7,10 +7,10 @@ class_name StatusBarSurface
 const BOTTOM_INSET: float = 24.0
 
 ## 底板主色。
-const FILL_COLOR: Color = Color(0.075, 0.085, 0.105, 0.94)
+const FILL_COLOR: Color = Color(0.075, 0.085, 0.105, 0.52)
 
 ## 底板描边色。
-const BORDER_COLOR: Color = Color(0.88, 0.91, 0.96, 0.24)
+const BORDER_COLOR: Color = Color(0.88, 0.91, 0.96, 0.16)
 
 
 ## 初始化鼠标拦截和重绘连接。
@@ -34,7 +34,7 @@ func _draw() -> void:
 	var shadow := PackedVector2Array()
 	for point in shape:
 		shadow.append(point + Vector2(0.0, 4.0))
-	draw_colored_polygon(shadow, Color(0.0, 0.0, 0.0, 0.28))
+	draw_colored_polygon(shadow, Color(0.0, 0.0, 0.0, 0.16))
 	draw_colored_polygon(shape, FILL_COLOR)
 	var outline := shape.duplicate()
 	outline.append(shape[0])

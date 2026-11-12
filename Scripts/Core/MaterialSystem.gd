@@ -248,21 +248,6 @@ func is_material_infinite(item_type: int) -> bool:
 	return false
 
 
-## 返回当前有效无限材料站数量，供状态栏详情展示来源构成。
-func get_infinite_source_count(item_type: int) -> int:
-	var count := 0
-	for building in TickManager.buildings:
-		if (
-			is_instance_valid(building)
-			and building.is_inside_tree()
-			and not building.is_queued_for_deletion()
-			and building.is_placed
-			and building.get_infinite_item_type() == item_type
-		):
-			count += 1
-	return count
-
-
 ## 汇总当前有效公共仓库中的指定物资；无限来源不改变这里的有限数量。
 func get_warehouse_item_total(item_type: int) -> int:
 	var total := 0
@@ -293,19 +278,12 @@ func get_material_status_detail(item_type: int) -> Array[Dictionary]:
 	var infinite := is_material_infinite(item_type)
 	var finite_total := get_warehouse_item_total(item_type)
 	var locked_total := get_warehouse_locked_total(item_type)
-	var warehouse_count := get_status_warehouses().size()
-	var infinite_sources := get_infinite_source_count(item_type)
-	var rows: Array[Dictionary] = [
-		{"label": "当前显示", "value": "无限" if infinite else str(finite_total)},
-		{"label": "仓库储量", "value": str(finite_total)},
-		{"label": "其中锁定", "value": str(locked_total)},
-		{"label": "有效仓库", "value": str(warehouse_count)},
-	]
-	if infinite_sources > 0:
-		rows.append({"label": "无限来源", "value": str(infinite_sources)})
 	return [{
 		"title": MaterialTypes.get_display_name(item_type),
-		"rows": rows,
+		"rows": [
+			{"label": "总数", "value": "无限" if infinite else str(finite_total)},
+			{"label": "已锁定", "value": str(locked_total)},
+		],
 	}]
 
 

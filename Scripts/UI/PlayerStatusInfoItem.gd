@@ -73,7 +73,6 @@ func refresh_summary() -> void:
 	var new_text := String(summary_provider.call()) if summary_provider.is_valid() else ""
 	if _value_label.text != new_text:
 		_value_label.text = new_text
-		tooltip_text = "%s：%s" % [title, new_text] if title != "" else new_text
 
 
 ## 返回摘要提供者当前给出的文本。
@@ -88,7 +87,22 @@ func get_icon_texture() -> Texture2D:
 
 ## 返回图标是否保持白色调制，用于验收统一白色图标契约。
 func has_white_icon() -> bool:
-	return _icon != null and _icon.modulate.is_equal_approx(Color.WHITE)
+	if _icon == null:
+		return false
+	var color := _icon.modulate
+	return (
+		is_equal_approx(color.r, 1.0)
+		and is_equal_approx(color.g, 1.0)
+		and is_equal_approx(color.b, 1.0)
+		and color.a > 0.0
+	)
+
+
+## 返回摘要文字当前透明度，供验收确认状态栏文字同步降低。
+func get_text_alpha() -> float:
+	if _value_label == null:
+		return 0.0
+	return _value_label.get_theme_color("font_color").a
 
 
 ## 返回详情提供者当前给出的通用板块内容。
@@ -125,7 +139,7 @@ func _build() -> void:
 	_icon = TextureRect.new()
 	_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_icon.texture = icon_texture
-	_icon.modulate = Color.WHITE
+	_icon.modulate = Color(1.0, 1.0, 1.0, 0.74)
 	_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_icon.custom_minimum_size = Vector2(20.0, 20.0)
@@ -136,13 +150,16 @@ func _build() -> void:
 		_title_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_title_label.text = title
 		_title_label.add_theme_font_size_override("font_size", 14)
-		_title_label.add_theme_color_override("font_color", Color(0.76, 0.81, 0.88))
+		_title_label.add_theme_color_override(
+			"font_color",
+			Color(0.76, 0.81, 0.88, 0.62),
+		)
 		row.add_child(_title_label)
 
 	_value_label = Label.new()
 	_value_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_value_label.add_theme_font_size_override("font_size", 15)
-	_value_label.add_theme_color_override("font_color", Color.WHITE)
+	_value_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.76))
 	_value_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	row.add_child(_value_label)
 
@@ -153,7 +170,7 @@ func _build() -> void:
 ## 创建信息项可复用的透明和悬停底板样式。
 func _make_style(hover: bool) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(1.0, 1.0, 1.0, 0.09 if hover else 0.0)
+	style.bg_color = Color(1.0, 1.0, 1.0, 0.055 if hover else 0.0)
 	style.set_corner_radius_all(3)
 	style.content_margin_left = 6.0
 	style.content_margin_right = 6.0
