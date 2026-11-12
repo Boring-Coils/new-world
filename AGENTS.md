@@ -354,7 +354,9 @@ refactor: 将居民移动逻辑迁移到 HumanMotion
 - 居民必须从场景实例化；直接构造会丢失组件。
 - 当前代码没有 `WorkStation` 类；具体工作站是 `ScrapSortingStation`，历史文档中的类名需要按此映射。
 - `ScrapSortingStation` 类默认 `target_workers = 0`；`TestScene` 会显式设为 `3`，不要据此推断新建筑会自动招聘。
-- 状态栏普通物资只汇总已放置公共仓库；工作站自带库存和居民背包不能混入。
+- 状态栏普通物资汇总所有已放置、有储存能力建筑的库存；居民背包不能混入。
 - 无限水/食物由建筑 `get_infinite_item_type()` 提供；新增无限材料站时必须覆盖该接口。
 - 取出工作需求后，物资位于 `Human.carry`；调试库存前先核对背包，避免重复记账。
 - 无头运行没有人工画面判断，UI、相机、动画和输入仍需单独验证。
+- `WorkingState` 因紧急需求中断前必须由 `try_interrupt_work_goal()` 成功切换到
+  水/食物目标；否则继续当前周期，避免反复以 `WORK` 目标离站并刷取消日志。

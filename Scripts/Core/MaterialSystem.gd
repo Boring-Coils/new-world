@@ -178,11 +178,11 @@ func get_warehouses() -> Array[Inventory]:
 	return result
 
 
-## 返回状态栏汇总使用的当前场景有效仓库。[br]
-## 只有已放置、仍在场景树内且未排进删除队列的公共仓库参与玩家储量统计。
-func get_status_warehouses() -> Array[Inventory]:
+## 返回状态栏汇总使用的当前场景有效库存。[br]
+## 所有已放置、仍在场景树内且未排进删除队列的储存建筑都参与玩家储量统计。
+func get_status_inventories() -> Array[Inventory]:
 	var result: Array[Inventory] = []
-	for inventory in get_warehouses():
+	for inventory in get_all_inventories():
 		var owner := inventory.owner
 		if (
 			is_instance_valid(owner)
@@ -248,19 +248,19 @@ func is_material_infinite(item_type: int) -> bool:
 	return false
 
 
-## 汇总当前有效公共仓库中的指定物资；无限来源不改变这里的有限数量。
-func get_warehouse_item_total(item_type: int) -> int:
+## 汇总当前有效储存建筑中的指定物资；无限来源不改变这里的有限数量。
+func get_status_item_total(item_type: int) -> int:
 	var total := 0
-	for inventory in get_status_warehouses():
+	for inventory in get_status_inventories():
 		total += inventory.get_item_count(item_type)
 	return total
 
 
-## 汇总当前有效公共仓库中的指定物资锁定量。[br]
+## 汇总当前有效储存建筑中的指定物资锁定量。[br]
 ## 已锁定但仍留在库存中的物资仍包含在储量总计里。
-func get_warehouse_locked_total(item_type: int) -> int:
+func get_status_locked_total(item_type: int) -> int:
 	var total := 0
-	for inventory in get_status_warehouses():
+	for inventory in get_status_inventories():
 		total += inventory.get_locked_quantity(item_type)
 	return total
 
@@ -269,15 +269,15 @@ func get_warehouse_locked_total(item_type: int) -> int:
 func get_material_status_text(item_type: int) -> String:
 	if is_material_infinite(item_type):
 		return "无限"
-	return str(get_warehouse_item_total(item_type))
+	return str(get_status_item_total(item_type))
 
 
 ## 生成指定物资的悬停详情内容。[br]
 ## 内容使用通用板块和文本行结构，由 [PlayerStatusBar] 统一渲染。
 func get_material_status_detail(item_type: int) -> Array[Dictionary]:
 	var infinite := is_material_infinite(item_type)
-	var finite_total := get_warehouse_item_total(item_type)
-	var locked_total := get_warehouse_locked_total(item_type)
+	var finite_total := get_status_item_total(item_type)
+	var locked_total := get_status_locked_total(item_type)
 	return [{
 		"title": MaterialTypes.get_display_name(item_type),
 		"rows": [

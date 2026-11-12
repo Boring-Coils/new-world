@@ -24,8 +24,11 @@ func _on_step() -> void:
 			_send(HumanAI.EVENT_WORK_CANCELLED)
 			return
 		HumanAI.WorkInterrupt.TRAVEL:
-			_send(HumanAI.EVENT_WORK_INTERRUPTED)
-			return
+			# 只有成功选中新的生存目标后才能离开工作；否则继续当前周期，
+			# 避免居民带着 WORK 目标反复退出工作状态。
+			if _controller.try_interrupt_work_goal():
+				_send(HumanAI.EVENT_WORK_INTERRUPTED)
+				return
 
 	var result := _controller.tick_work_cycle()
 	if result == &"completed" or result == &"cancelled":

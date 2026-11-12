@@ -1335,11 +1335,21 @@ func _test_carry() -> void:
 	# 决策快照平时由每刻刷新，这里直接刷新一次，让缺水判定读到最新数值。
 	worker.ai.get("_context").refresh(worker)
 	var interrupt := worker.ai.evaluate_work_interrupt()
+	worker.ai.force_next_decision()
+	var redirected := worker.ai.try_interrupt_work_goal()
 	_check(
 		"CARRY-09",
-		interrupt == HumanAI.WorkInterrupt.TRAVEL and behavior.get_phase_name() == &"acquiring",
-		"取料途中紧急缺水时允许离开准备阶段",
-		"interrupt=%d phase=%s" % [interrupt, behavior.get_phase_name()],
+		interrupt == HumanAI.WorkInterrupt.TRAVEL
+		and redirected
+		and worker.ai.get_goal() == HumanAI.Goal.WATER
+		and behavior.get_phase_name() == &"acquiring",
+		"取料途中紧急缺水时先切换到取水目标再离开准备阶段",
+		"interrupt=%d redirected=%s goal=%s phase=%s" % [
+			interrupt,
+			redirected,
+			HumanAI.Goal.keys()[worker.ai.get_goal()],
+			behavior.get_phase_name(),
+		],
 	)
 	behavior.cancel("测试结束")
 	await _dispose_tracked()
@@ -2317,8 +2327,8 @@ func _test_status_display() -> void:
 		"material:%d" % MaterialTypes.ItemType.WATER: "无限",
 		"material:%d" % MaterialTypes.ItemType.FOOD: "无限",
 		"material:%d" % MaterialTypes.ItemType.WASTE: "4",
-		"material:%d" % MaterialTypes.ItemType.PLASTIC: "3",
-		"material:%d" % MaterialTypes.ItemType.METAL: "2",
+		"material:%d" % MaterialTypes.ItemType.PLASTIC: "33",
+		"material:%d" % MaterialTypes.ItemType.METAL: "32",
 		"material:%d" % MaterialTypes.ItemType.WIRE: "1",
 	}
 	var summaries_ok := true
@@ -2329,7 +2339,7 @@ func _test_status_display() -> void:
 	_check(
 		"STAT-04",
 		summaries_ok,
-		"只汇总仓库，工作站自带库存不进入第一行",
+		"汇总所有有效储存建筑，包含工作站自带库存",
 		"summaries=%s" % summaries,
 	)
 
@@ -2379,7 +2389,7 @@ func _test_status_display() -> void:
 		and food_station.get_infinite_item_type() == MaterialTypes.ItemType.FOOD
 	)
 	var infinite_overrides_warehouse := (
-		MaterialSystem.get_warehouse_item_total(MaterialTypes.ItemType.WATER) == 7
+		MaterialSystem.get_status_item_total(MaterialTypes.ItemType.WATER) == 7
 		and String(status_bar.get_item_summaries().get(
 			"material:%d" % MaterialTypes.ItemType.WATER,
 			"",
@@ -2391,7 +2401,7 @@ func _test_status_display() -> void:
 		"水/食物无限来源覆盖同类仓库有限储量",
 		"types_ok=%s finite_water=%d summary=%s" % [
 			infinite_types_ok,
-			MaterialSystem.get_warehouse_item_total(MaterialTypes.ItemType.WATER),
+			MaterialSystem.get_status_item_total(MaterialTypes.ItemType.WATER),
 			status_bar.get_item_summaries().get(
 				"material:%d" % MaterialTypes.ItemType.WATER,
 				"",
@@ -2539,7 +2549,7 @@ func _test_status_display() -> void:
 	var width_before := (status_bar.get_debug_snapshot()["bar_size"] as Vector2).x
 	var custom_item := status_bar.register_info_item({
 		"id": "test:no_detail",
-		"row": 1,
+		"row": 0,
 		"order": 99,
 		"title": "测试项",
 		"icon": PlayerStatusBar.POPULATION_ICON,
