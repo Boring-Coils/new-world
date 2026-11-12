@@ -27,6 +27,18 @@ signal tick_advanced(total_ticks: int, day: int, tick_of_day: int)
 ## 详情页这类「想认识所有建筑」的东西连这个，就不用自己轮询。
 signal building_registered(building: Building)
 
+## 建筑从每刻更新表注销时发出。
+signal building_unregistered(building: Building)
+
+## 新居民完成场景就绪并登记到每刻更新表时发出。
+signal human_registered(human: Human)
+
+## 居民离场并从每刻更新表注销时发出。
+signal human_unregistered(human: Human)
+
+## 已登记居民的非每刻属性发生变化时发出，目前用于年龄阶段变化通知。
+signal human_changed(human: Human)
+
 ## 每天第一刻发出一次
 signal day_advanced(day: int)
 
@@ -110,7 +122,9 @@ func register_building(building: Building) -> void:
 ## 从每刻建筑列表移除指定建筑；未登记时安全忽略。[br]
 ## [param building] 是要停止参与每刻更新的建筑实例。
 func unregister_building(building: Building) -> void:
-	buildings.erase(building)
+	if buildings.has(building):
+		buildings.erase(building)
+		building_unregistered.emit(building)
 
 
 ## 登记居民；重复登记不会重复加入。[br]
@@ -118,12 +132,21 @@ func unregister_building(building: Building) -> void:
 func register_human(human: Human) -> void:
 	if not humans.has(human):
 		humans.append(human)
+		human_registered.emit(human)
 
 
 ## 从每刻居民列表移除指定居民；未登记时安全忽略。[br]
 ## [param human] 是要停止参与每刻更新的居民实例。
 func unregister_human(human: Human) -> void:
-	humans.erase(human)
+	if humans.has(human):
+		humans.erase(human)
+		human_unregistered.emit(human)
+
+
+## 通知居民统计相关属性已经变化；不在场景树中的临时对象不会广播。
+func notify_human_changed(human: Human) -> void:
+	if human != null and humans.has(human):
+		human_changed.emit(human)
 
 
 ## 返回指定建筑类型下仍有效且已登记的全部建筑。[br]

@@ -14,7 +14,13 @@ const MAX_FOOD: float = 700.0
 @export var age: int = 20
 
 ## 居民年龄阶段，决定移动速度、日消耗和可雇佣范围。
-@export var age_status: GlobalEnum.AgeStatus = GlobalEnum.AgeStatus.ADULT
+@export var age_status: GlobalEnum.AgeStatus = GlobalEnum.AgeStatus.ADULT:
+	set(value):
+		if age_status == value:
+			return
+		age_status = value
+		if is_inside_tree():
+			TickManager.notify_human_changed(self)
 
 ## 当前水分；降到 0 或以下会触发虚弱。
 @export var water: float = MAX_WATER
@@ -94,6 +100,8 @@ func _exit_tree() -> void:
 ## 建立与 [param building] 的雇佣关系；调用方负责同步建筑的雇员名单。
 func bind_employer(building: Building) -> void:
 	employer = building
+	if is_inside_tree():
+		TickManager.notify_human_changed(self)
 
 
 ## 接收雇佣结束通知，清理雇主引用并让 AI 取消相关工作状态。[br]
@@ -102,6 +110,8 @@ func bind_employer(building: Building) -> void:
 func notify_employment_ended(building: Building, reason: String) -> void:
 	if employer == building:
 		employer = null
+		if is_inside_tree():
+			TickManager.notify_human_changed(self)
 	if is_instance_valid(ai):
 		ai.on_employment_ended(building, reason)
 

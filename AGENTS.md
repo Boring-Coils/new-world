@@ -8,7 +8,7 @@
 
 ## 1. 项目定位
 
-这是一个使用 Godot 4.7 开发的 2D 殖民地模拟原型，当前项目版本为 `0.0.1.5`。
+这是一个使用 Godot 4.7 开发的 2D 殖民地模拟原型，当前项目版本为 `0.0.1.6`。
 
 - 主场景是 `Scenes/Colony.tscn`，集成检查场景是 `Scenes/TestScene.tscn`。
 - 游戏按“刻”推进，不是按帧推进；建筑、居民、Buff 和资源结算都与 `TickManager` 对齐。
@@ -39,11 +39,11 @@ godot --headless --path . Scenes/TestScene.tscn -- --autoplace --speed=20 --max-
 # Buff 链路检查
 godot --headless --path . Scenes/TestScene.tscn -- --bufftest --speed=20 --max-ticks=140
 
-# v0.0.1.5 完整验收（逐项输出 PASS/FAIL）
-godot --headless --path . --log-file .godot/v015_acceptance.log --scene res://Scenes/TestScene.tscn -- --acceptance
+# v0.0.1.6 完整验收（逐项输出 PASS/FAIL）
+godot --headless --path . --log-file .godot/v016_acceptance.log --scene res://Scenes/TestScene.tscn -- --acceptance
 
 # 导出调试版，输出目录被 .gitignore 忽略
-godot --headless --path . --export-debug "Windows Desktop" build/0.0.1.5/new_world.exe
+godot --headless --path . --export-debug "Windows Desktop" build/0.0.1.6/new_world.exe
 ```
 
 `Scenes/TestScene.tscn` 的测试参数位于引擎参数分隔符 `--` 之后。常用的用户参数有：
@@ -54,7 +54,7 @@ godot --headless --path . --export-debug "Windows Desktop" build/0.0.1.5/new_wor
 | `--max-ticks=600` | 跑满指定刻数后退出；无头测试必须提供，避免进程不退出 |
 | `--autoplace` | 自动放置建筑和居民，检查合法放置、非法放置、重叠和挤出逻辑 |
 | `--bufftest` | 在固定刻数添加疲劳、眩晕和口渴，检查倍率、工作闸门和到期 |
-| `--acceptance` | 运行 v0.0.1.5 的雇佣、班次、周期、背包、拆除、旋转、库存、清算、UI 和模拟自检 |
+| `--acceptance` | 运行 v0.0.1.6 的雇佣、班次、周期、背包、拆除、旋转、库存、清算、统计显示、UI 和模拟自检 |
 | `--shot=路径.png` | 在满足条件时截取当前画面；视觉检查仍优先使用编辑器窗口 |
 
 运行后不要只看退出码。Godot 可能出现脚本错误但进程仍然结束的情况，必须检查输出里是否含有
@@ -212,8 +212,11 @@ build/                     本地导出目录，不提交
 - 建筑详情页每刻刷新；不要在面板里为每种建筑写类型分支。
 - 放置模式下必须禁用已有建筑的点击区，否则建筑按钮会吞掉左键事件。
 - `DebugUI` 只负责显示和发出选择信号，实际放置由 `PlacementController` 完成。
-- 当前库存总览只显示容量、已用体积和已预留体积；虽然 `Inventory` 提供
-  `get_available_volume()`，详情页尚未显示“可用体积”行。
+- 当前库存总览显示容量、已用体积、已预留体积和可用体积。
+- 玩家状态栏由 `World` 挂载，`MaterialSystem` 每个场景注册一次物资显示项；
+  摘要和详情都由事件驱动刷新，不通过状态栏逐刻轮询。
+- 状态栏贴顶显示并使用约 `0.5` 透明度的底板和文字；物资详情只含总数与已锁定
+  数量，人口详情显示各年龄段无工作人数，时间项不提供悬停详情。
 
 ### 4.9 居民背包与物资归属
 
@@ -299,12 +302,11 @@ godot --headless --path . Scenes/TestScene.tscn -- --bufftest --speed=20 --max-t
 godot --headless --path . --log-file .godot/v015_acceptance.log --scene res://Scenes/TestScene.tscn -- --acceptance
 ```
 
-当前共 103 项：18 个雇佣、8 个班次/等待、19 个工作周期、11 个居民背包、
-5 个建筑拆除、4 个建筑旋转、19 个库存、10 个清算、7 个 UI 契约、
-1 个真实模拟和 1 个物资账本日志检查。
+当前共 115 项：18 个雇佣、8 个班次/等待、19 个工作周期、11 个居民背包、
+5 个建筑拆除、4 个建筑旋转、19 个库存、10 个清算、12 个统计显示、
+7 个 UI 契约、1 个真实模拟和 1 个物资账本日志检查。
 
-当前基线为 `102/103`，唯一失败项 `UI-03` 来自库存详情行和验收断言不一致。
-修改相关 UI 或验收代码前不要把完整验收标记为全部通过。
+当前基线为 `115/115 PASS`。修改状态栏、库存汇总或 UI 契约后仍需重新运行完整验收。
 
 ### 7.6 人工验证
 
@@ -312,6 +314,7 @@ godot --headless --path . --log-file .godot/v015_acceptance.log --scene res://Sc
 
 - 相机拖动、缩放和快捷键。
 - UI 布局、窗口缩放、文本截断、按钮点击区和层级遮挡。
+- 顶部状态栏的动态宽度、白色图标、倒置梯形外观、悬停详情位置和鼠标遮挡范围。
 - 建筑预览、`R` 旋转、连续放置、右键或 ESC 取消。
 - 居民动画、朝向、进出工作站时的显示状态。
 - 截图和实际画面是否与逻辑状态一致。
@@ -351,6 +354,9 @@ refactor: 将居民移动逻辑迁移到 HumanMotion
 - 居民必须从场景实例化；直接构造会丢失组件。
 - 当前代码没有 `WorkStation` 类；具体工作站是 `ScrapSortingStation`，历史文档中的类名需要按此映射。
 - `ScrapSortingStation` 类默认 `target_workers = 0`；`TestScene` 会显式设为 `3`，不要据此推断新建筑会自动招聘。
-- 当前库存详情没有“可用体积”行，完整验收 `UI-03` 会失败；`Inventory.get_available_volume()` 本身可用。
+- 状态栏普通物资汇总所有已放置、有储存能力建筑的库存；居民背包不能混入。
+- 无限水/食物由建筑 `get_infinite_item_type()` 提供；新增无限材料站时必须覆盖该接口。
 - 取出工作需求后，物资位于 `Human.carry`；调试库存前先核对背包，避免重复记账。
 - 无头运行没有人工画面判断，UI、相机、动画和输入仍需单独验证。
+- `WorkingState` 因紧急需求中断前必须由 `try_interrupt_work_goal()` 成功切换到
+  水/食物目标；否则继续当前周期，避免反复以 `WORK` 目标离站并刷取消日志。

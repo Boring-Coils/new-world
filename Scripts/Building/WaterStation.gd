@@ -22,6 +22,12 @@ func _init() -> void:
 func get_wait_ticks() -> int:
 	return WAIT_TICKS
 
+
+## 无限取水站为状态栏提供无限的水储量。
+func get_infinite_item_type() -> int:
+	return MaterialTypes.ItemType.WATER
+
+
 ## 在建筑详情页添加无限水储量状态行。
 func build_detail() -> void:
 	super.build_detail()

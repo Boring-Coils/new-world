@@ -4,6 +4,10 @@
 class_name Inventory
 extends RefCounted
 
+## 库存中的物品数量被写入、移除或清空时发出。[br]
+## [MaterialSystem] 在登记期间订阅该信号，统一转换为场景级 [signal MaterialSystem.inventory_changed]。
+signal changed(inventory: Inventory)
+
 ## 账本分配的库存编号；未登记时为 -1。
 var inventory_id: int = -1
 
@@ -79,11 +83,15 @@ func can_add_items(items_to_add: Dictionary) -> bool:
 func add_items_unchecked(items_to_add: Dictionary) -> bool:
 	if not can_add_items(items_to_add):
 		return false
+	var changed_items := false
 	for item_type in items_to_add:
 		var quantity := maxi(int(items_to_add[item_type]), 0)
 		if quantity <= 0:
 			continue
 		items[int(item_type)] = get_item_count(int(item_type)) + quantity
+		changed_items = true
+	if changed_items:
+		notify_changed()
 	return true
 
 
@@ -92,12 +100,24 @@ func add_items_unchecked(items_to_add: Dictionary) -> bool:
 func remove_items_unchecked(item_type: int, quantity: int) -> int:
 	var removed := mini(maxi(quantity, 0), get_item_count(item_type))
 	items[item_type] = get_item_count(item_type) - removed
+	if removed > 0:
+		notify_changed()
 	return removed
 
 
 ## 清空所有物资并返回清空前的数量快照。
 func clear_items() -> Dictionary:
 	var snapshot := items.duplicate()
+	var had_items := get_used_volume() > 0
 	for item_type in items:
 		items[item_type] = 0
+	if had_items:
+		notify_changed()
 	return snapshot
+
+
+## 在直接修改 [member items] 后主动发布库存变化。[br]
+## 未登记的库存不广播，避免场景切换期间把旧库存变化传播给新场景 UI。
+func notify_changed() -> void:
+	if is_registered:
+		changed.emit(self)

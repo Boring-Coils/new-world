@@ -14,6 +14,10 @@ enum ItemType {
 	PLASTIC,
 	## 由金属与塑料加工得到的线材。
 	WIRE,
+	## 由无限取水站或仓库提供的饮用水。
+	WATER,
+	## 由无限取食站或仓库提供的食物。
+	FOOD,
 }
 
 ## 每种物资单件占用的体积。[br]
@@ -23,6 +27,8 @@ const UNIT_VOLUMES: Dictionary = {
 	ItemType.METAL: 1,
 	ItemType.PLASTIC: 1,
 	ItemType.WIRE: 1,
+	ItemType.WATER: 1,
+	ItemType.FOOD: 1,
 }
 
 ## 每种物资面向玩家显示的中文名称。
@@ -31,7 +37,20 @@ const DISPLAY_NAMES: Dictionary = {
 	ItemType.METAL: "金属",
 	ItemType.PLASTIC: "塑料",
 	ItemType.WIRE: "线",
+	ItemType.WATER: "水",
+	ItemType.FOOD: "食物",
 }
+
+## 玩家状态栏中的物资显示顺序。[br]
+## 与枚举值顺序分开保存，避免新增逻辑物资时意外改变玩家看到的排列。
+const STATUS_ITEM_ORDER: Array[int] = [
+	ItemType.WATER,
+	ItemType.FOOD,
+	ItemType.WASTE,
+	ItemType.PLASTIC,
+	ItemType.METAL,
+	ItemType.WIRE,
+]
 
 
 ## 返回 [param item_type] 单件占用的体积；未知类型返回 0。
@@ -61,4 +80,11 @@ static func get_item_types() -> Array[int]:
 		ItemType.METAL,
 		ItemType.PLASTIC,
 		ItemType.WIRE,
+		ItemType.WATER,
+		ItemType.FOOD,
 	]
+
+
+## 返回玩家状态栏约定的六种物资顺序。
+static func get_status_item_order() -> Array[int]:
+	return STATUS_ITEM_ORDER.duplicate()

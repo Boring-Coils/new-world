@@ -6,11 +6,34 @@ extends Node
 ## 某个库存的物品数量、锁定量或预留量发生变化时发出。
 signal inventory_changed(inventory: Inventory)
 
+## 玩家状态栏需要显示一种物资时发出一次注册定义。
+signal status_item_registered(definition: Dictionary)
+
+## 无限材料来源或仓库构成发生变化时发出，供玩家状态栏重新汇总物资。[br]
+## 仓库库存自身的数量变化仍由 [signal inventory_changed] 通知。
+signal status_sources_changed
+
 ## 所有者库存清算完成时发出，报告来源、成功转移体积和最终销毁体积。
 signal cleanup_completed(source_name: String, moved_volume: int, destroyed_volume: int)
 
+## 玩家状态栏使用的白色物资图标。
+const STATUS_ICONS: Dictionary = {
+	MaterialTypes.ItemType.WATER: preload("res://Assets/Icons/Status/water.svg"),
+	MaterialTypes.ItemType.FOOD: preload("res://Assets/Icons/Status/food.svg"),
+	MaterialTypes.ItemType.WASTE: preload("res://Assets/Icons/Status/waste.svg"),
+	MaterialTypes.ItemType.PLASTIC: preload("res://Assets/Icons/Status/plastic.svg"),
+	MaterialTypes.ItemType.METAL: preload("res://Assets/Icons/Status/metal.svg"),
+	MaterialTypes.ItemType.WIRE: preload("res://Assets/Icons/Status/wire.svg"),
+}
+
 # 已登记库存编号到库存实例的映射。
 var _inventories: Dictionary = {}
+
+# 状态栏物资定义，按稳定标识保存。
+var _status_items: Dictionary = {}
+
+# 本次场景生命周期内成功注册的物资项数量。
+var _status_registration_count: int = 0
 
 # 进行中的物品锁记录，键为锁标识。
 var _locks: Dictionary = {}
@@ -31,10 +54,19 @@ var _next_reservation_id: int = 1
 var _scene_shutdown: bool = false
 
 
+## 将建筑注册事件转发为无限材料来源变化；场景生命周期内只连接一次。
+func _ready() -> void:
+	if not TickManager.building_registered.is_connected(_on_building_source_changed):
+		TickManager.building_registered.connect(_on_building_source_changed)
+	if not TickManager.building_unregistered.is_connected(_on_building_source_changed):
+		TickManager.building_unregistered.connect(_on_building_source_changed)
+
+
 ## 开始新场景的物资账本生命周期，结束旧场景状态并清空全部记录。
 func start_scene() -> void:
 	_scene_shutdown = false
 	reset()
+	_register_default_status_items()
 
 
 ## 标记场景进入关闭阶段，阻止清理流程继续向其他库存分配物资。
@@ -71,11 +103,14 @@ func is_scene_shutdown() -> bool:
 func reset() -> void:
 	for inventory in _inventories.values():
 		if inventory is Inventory:
+			_disconnect_inventory(inventory)
 			inventory.is_registered = false
 			inventory.reserved_volume = 0
 	_inventories.clear()
 	_locks.clear()
 	_reservations.clear()
+	_status_items.clear()
+	_status_registration_count = 0
 	_next_inventory_id = 1
 	_next_lock_id = 1
 	_next_reservation_id = 1
@@ -96,6 +131,8 @@ func register_inventory(inventory: Inventory, owner: Building = null) -> bool:
 	inventory.is_registered = true
 	inventory.reserved_volume = 0
 	_inventories[inventory.inventory_id] = inventory
+	if not inventory.changed.is_connected(_on_inventory_mutated):
+		inventory.changed.connect(_on_inventory_mutated)
 	inventory_changed.emit(inventory)
 	return true
 
@@ -105,9 +142,12 @@ func register_inventory(inventory: Inventory, owner: Building = null) -> bool:
 func unregister_inventory(inventory: Inventory) -> void:
 	if inventory == null:
 		return
+	_disconnect_inventory(inventory)
 	inventory.is_registered = false
 	_inventories.erase(inventory.inventory_id)
 	_invalidate_inventory_records(inventory.inventory_id)
+	# UI 需要知道仓库已经失效；汇总时会忽略这条未登记库存本身。
+	inventory_changed.emit(inventory)
 
 
 ## 返回库存是否仍属于当前账本且标记为已登记。[br]
@@ -136,6 +176,115 @@ func get_warehouses() -> Array[Inventory]:
 		if is_instance_valid(inventory.owner) and inventory.owner.is_warehouse:
 			result.append(inventory)
 	return result
+
+
+## 返回状态栏汇总使用的当前场景有效库存。[br]
+## 所有已放置、仍在场景树内且未排进删除队列的储存建筑都参与玩家储量统计。
+func get_status_inventories() -> Array[Inventory]:
+	var result: Array[Inventory] = []
+	for inventory in get_all_inventories():
+		var owner := inventory.owner
+		if (
+			is_instance_valid(owner)
+			and owner.is_inside_tree()
+			and not owner.is_queued_for_deletion()
+			and owner.is_placed
+		):
+			result.append(inventory)
+	return result
+
+
+## 返回本次场景登记的状态栏物资定义快照。
+func get_status_item_registrations() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for definition in _status_items.values():
+		result.append(definition.duplicate())
+	result.sort_custom(
+		func(a: Dictionary, b: Dictionary) -> bool:
+			return int(a["order"]) < int(b["order"])
+	)
+	return result
+
+
+## 返回本次场景成功注册的物资项数量，用于验证注册只发生一次。
+func get_status_registration_count() -> int:
+	return _status_registration_count
+
+
+## 注册一条状态栏物资定义；相同稳定标识重复注册会被拒绝。[br]
+## 定义必须提供 [code]id[/code]、[code]title[/code]、[code]icon[/code]、
+## [code]summary_provider[/code] 和 [code]detail_provider[/code]。
+func register_status_item(definition: Dictionary) -> bool:
+	var item_id := String(definition.get("id", ""))
+	if item_id == "" or _status_items.has(item_id):
+		return false
+	var normalized := definition.duplicate()
+	normalized["id"] = item_id
+	normalized["row"] = int(normalized.get("row", 0))
+	normalized["order"] = int(normalized.get("order", _status_items.size()))
+	normalized["show_title"] = bool(normalized.get("show_title", false))
+	normalized["refresh_channels"] = normalized.get(
+		"refresh_channels",
+		[&"materials"],
+	)
+	_status_items[item_id] = normalized
+	_status_registration_count += 1
+	status_item_registered.emit(normalized.duplicate())
+	return true
+
+
+## 返回指定物资当前是否由场景内有效无限材料站提供。
+func is_material_infinite(item_type: int) -> bool:
+	for building in TickManager.buildings:
+		if (
+			not is_instance_valid(building)
+			or not building.is_inside_tree()
+			or building.is_queued_for_deletion()
+			or not building.is_placed
+		):
+			continue
+		if building.get_infinite_item_type() == item_type:
+			return true
+	return false
+
+
+## 汇总当前有效储存建筑中的指定物资；无限来源不改变这里的有限数量。
+func get_status_item_total(item_type: int) -> int:
+	var total := 0
+	for inventory in get_status_inventories():
+		total += inventory.get_item_count(item_type)
+	return total
+
+
+## 汇总当前有效储存建筑中的指定物资锁定量。[br]
+## 已锁定但仍留在库存中的物资仍包含在储量总计里。
+func get_status_locked_total(item_type: int) -> int:
+	var total := 0
+	for inventory in get_status_inventories():
+		total += inventory.get_locked_quantity(item_type)
+	return total
+
+
+## 返回指定物资的状态栏摘要文本；存在无限来源时固定显示“无限”。
+func get_material_status_text(item_type: int) -> String:
+	if is_material_infinite(item_type):
+		return "无限"
+	return str(get_status_item_total(item_type))
+
+
+## 生成指定物资的悬停详情内容。[br]
+## 内容使用通用板块和文本行结构，由 [PlayerStatusBar] 统一渲染。
+func get_material_status_detail(item_type: int) -> Array[Dictionary]:
+	var infinite := is_material_infinite(item_type)
+	var finite_total := get_status_item_total(item_type)
+	var locked_total := get_status_locked_total(item_type)
+	return [{
+		"title": MaterialTypes.get_display_name(item_type),
+		"rows": [
+			{"label": "总数", "value": "无限" if infinite else str(finite_total)},
+			{"label": "已锁定", "value": str(locked_total)},
+		],
+	}]
 
 
 ## 按距离 [param source_origin] 的远近返回可选外部仓库。[br]
@@ -257,7 +406,6 @@ func take_locked(lock_id: String, carrier: CarryBag = null) -> bool:
 		# 物品已经进了背包，锁的使命到此结束；取消或结算时由背包负责。
 		carrier.add_items({item_type: quantity})
 		lock["closed"] = true
-	inventory_changed.emit(inventory)
 	return true
 
 
@@ -320,15 +468,14 @@ func release_lock(lock_id: String) -> void:
 		var returned := false
 		if is_inventory_registered(source):
 			returned = source.add_items_unchecked({item_type: quantity})
-		if returned:
-			inventory_changed.emit(source)
-		else:
+		if not returned:
 			_route_items(
 				{item_type: quantity},
 				lock["source_origin"] as Vector2i,
 				source.inventory_id if source != null else -1,
 			)
 	elif is_inventory_registered(source):
+		# 未取出的锁也会改变“锁定数量”详情，即使库存物品数量没有变化。
 		inventory_changed.emit(source)
 	# 已经关闭的锁不再变化，直接删掉记录，避免长时间运行时账本只增不减。
 	_locks.erase(lock_id)
@@ -624,7 +771,6 @@ func _return_to_source(lock: Dictionary, item_type: int, quantity: int) -> void:
 	var source: Inventory = lock["inventory"]
 	if source != null and is_instance_valid(source) and is_inventory_registered(source):
 		if source.add_items_unchecked({item_type: quantity}):
-			inventory_changed.emit(source)
 			return
 	var origin := lock["source_origin"] as Vector2i
 	var exclude_id := -1
@@ -927,7 +1073,7 @@ func _allocate_items(
 			inventory.items[item_type] = inventory.get_item_count(item_type) + amount
 			remaining[item_type] = quantity - amount
 			allowance -= amount * unit_volume
-			inventory_changed.emit(inventory)
+			inventory.notify_changed()
 	return remaining
 
 
@@ -957,7 +1103,7 @@ func _route_items(
 			inventory.items[item_type] = inventory.get_item_count(item_type) + fit
 			remaining[item_type] = quantity - fit
 			moved_volume += fit * unit_volume
-			inventory_changed.emit(inventory)
+			inventory.notify_changed()
 		if _is_empty_items(remaining):
 			break
 	return moved_volume
@@ -1000,6 +1146,48 @@ func _unique_inventories(
 		if is_inventory_registered(inventory) and not result.has(inventory):
 			result.append(inventory)
 	return result
+
+
+## 按玩家约定顺序注册六种物资显示项。[br]
+## 每个场景生命周期只在 [method start_scene] 调用一次，后续通过库存与来源信号更新。
+func _register_default_status_items() -> void:
+	var item_types := MaterialTypes.get_status_item_order()
+	for index in range(item_types.size()):
+		var item_type := item_types[index]
+		register_status_item({
+			"id": "material:%d" % item_type,
+			"row": 0,
+			"order": index,
+			"title": MaterialTypes.get_display_name(item_type),
+			"icon": STATUS_ICONS[item_type],
+			"show_title": false,
+			"summary_provider": Callable(
+				self,
+				"get_material_status_text",
+			).bind(item_type),
+			"detail_provider": Callable(
+				self,
+				"get_material_status_detail",
+			).bind(item_type),
+			"refresh_channels": [&"materials"],
+		})
+
+
+## 把已登记库存自身的写入信号转换成场景级库存变更通知。
+func _on_inventory_mutated(inventory: Inventory) -> void:
+	if is_inventory_registered(inventory):
+		inventory_changed.emit(inventory)
+
+
+## 解除库存写入信号连接，避免旧场景库存继续向新场景 UI 广播。
+func _disconnect_inventory(inventory: Inventory) -> void:
+	if inventory != null and inventory.changed.is_connected(_on_inventory_mutated):
+		inventory.changed.disconnect(_on_inventory_mutated)
+
+
+## 建筑登记或注销可能改变无限材料来源，因此只在相应事件到达时通知状态栏。
+func _on_building_source_changed(_building: Building) -> void:
+	status_sources_changed.emit()
 
 
 ## 计算两个格子之间的切比雪夫距离，用于八方向移动和距离排序。[br]

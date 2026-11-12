@@ -22,6 +22,12 @@ func _init() -> void:
 func get_wait_ticks() -> int:
 	return WAIT_TICKS
 
+
+## 无限取食站为状态栏提供无限的食物储量。
+func get_infinite_item_type() -> int:
+	return MaterialTypes.ItemType.FOOD
+
+
 ## 在建筑详情页添加无限食物储量状态行。
 func build_detail() -> void:
 	super.build_detail()
